@@ -89,12 +89,12 @@ Burn is **net**: `(MET − 1) × kg × hours`. Your maintenance calories already
 
 Every activity has levels from beginner to expert. Values are gross METs from the 2024 Adult Compendium of Physical Activities unless marked.
 
-| Activity                                                  | Beginner                     | Intermediate             | Advanced                     | Expert                                    |
-| --------------------------------------------------------- | ---------------------------- | ------------------------ | ---------------------------- | ----------------------------------------- |
-| Jump rope (jumps per minute, or type your own: 30 to 160) | 30 to 60: **6.0 (estimate)** | 60 to 100: 8.8           | 100 to 130: 11.0             | 130 to 160: 12.3                          |
-| Bodyweight and calisthenics                               | Light 2.8                    | Moderate 3.8             | High intensity 6.5           | Vigorous 7.5                              |
-| Circuit training                                          | Light 3.5                    | Moderate 5.0             | Bodyweight exercises 6.0     | Vigorous, minimal rest 7.5                |
-| Weight training (push, pull, or legs)                     | 8 to 15 reps 3.5             | Heavy compound lifts 5.0 | Supersets or short rests 5.8 | Vigorous powerlifting or bodybuilding 6.0 |
+| Activity                              | Beginner                     | Intermediate             | Advanced                     | Expert                                    |
+| ------------------------------------- | ---------------------------- | ------------------------ | ---------------------------- | ----------------------------------------- |
+| Jump rope (jumps per minute)          | 30 to 60: **6.0 (estimate)** | 60 to 100: 8.8           | 100 to 130: 11.0             | 130 to 160: 12.3                          |
+| Bodyweight and calisthenics           | Light 2.8                    | Moderate 3.8             | High intensity 6.5           | Vigorous 7.5                              |
+| Circuit training                      | Light 3.5                    | Moderate 5.0             | Bodyweight exercises 6.0     | Vigorous, minimal rest 7.5                |
+| Weight training (push, pull, or legs) | 8 to 15 reps 3.5             | Heavy compound lifts 5.0 | Supersets or short rests 5.8 | Vigorous powerlifting or bodybuilding 6.0 |
 
 HIIT, by type (beginner is always moderate-effort intervals at 7.0, the lowest published HIIT value):
 

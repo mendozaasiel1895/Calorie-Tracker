@@ -61,7 +61,6 @@
     xm: 1,
     xv: 1,
     xr: 1,
-    xj: 1,
     ww: 1,
   };
   var INT_IDS = { age: 1, mo: 1 };
@@ -162,7 +161,6 @@
   var EXG = [
     {
       n: "Jump rope",
-      jpm: true,
       lv: [
         ["Beginner: 30 to 60 jumps per minute (estimate)", 6.0],
         ["Intermediate: 60 to 100 jumps per minute", 8.8],
@@ -269,7 +267,7 @@
     }
     return CYC[CYC.length - 1][1];
   }
-  /* x = { a: activity, t: type index, i: level index, j: jumps per minute,
+  /* x = { a: activity, t: type index, i: level index,
      sp: km/h, gr: grade %}. Walking and running use the ACSM metabolic
      equations; the net oxygen cost is the part above the resting 3.5 ml/kg/min,
      divided by 3.5 to give METs. */
@@ -282,12 +280,7 @@
     if (!X.k) {
       var lv = X.lv || X.lvBy[x.t],
         i = Math.min(Math.max(x.i || 0, 0), lv.length - 1);
-      if (X.jpm && x.j) {
-        i = x.j < 60 ? 0 : x.j < 100 ? 1 : x.j < 130 ? 2 : 3;
-        label = X.n + ", " + x.j + " jumps per minute";
-      } else {
-        label = X.n + (X.sub ? " (" + X.sub[x.t] + ")" : "") + ", " + lv[i][0];
-      }
+      label = X.n + (X.sub ? " (" + X.sub[x.t] + ")" : "") + ", " + lv[i][0];
       net = lv[i][1] - 1;
     } else if (X.k === "cyc") {
       net = cycMet(x.sp / MPH) - 1;
@@ -987,7 +980,6 @@
       xt = el("select", { id: "xt" }),
       xi = el("select", { id: "xi" }),
       xu = el("select", { id: "xu" }),
-      xjI = el("input", { id: "xj" }),
       xvI = el("input", { id: "xv" }),
       xrI = el("input", { id: "xr" }),
       xmI = el("input", { id: "xm", value: "30" });
@@ -999,12 +991,11 @@
     var lTt = el("span", { text: "Type" }),
       lT = el("label", {}, lTt, xt),
       lI = el("label", { text: "Level" }, xi),
-      lJ = el("label", { text: "Jumps per minute (optional, 30 to 160)" }, xjI),
       lV = el("label", { text: "Speed" }, xvI),
       lU = el("label", { text: "Speed unit" }, xu),
       lR = el("label", { text: "Grade % (optional, 1 to 15)" }, xrI);
     xg.appendChild(el("label", { text: "Activity" }, xs));
-    [lT, lI, lJ, lV, lU, lR].forEach(function (n) {
+    [lT, lI, lV, lU, lR].forEach(function (n) {
       xg.appendChild(n);
     });
     xg.appendChild(el("label", { text: "Minutes (1 to 600)" }, xmI));
@@ -1036,7 +1027,6 @@
         lTt.textContent = X.subLabel;
       }
       lT.hidden = !X.sub;
-      lJ.hidden = !X.jpm;
       if (!X.k) {
         var key = xs.value + "/" + (X.lvBy ? xt.value : ""),
           keep = +xi.value || 0;
@@ -1067,7 +1057,6 @@
           i: +xi.value || 0,
           sp: 0,
           gr: 0,
-          j: 0,
         };
       if (!isFinite(m) || m < 1 || m > 600)
         errs.push("Minutes must be between 1 and 600.");
@@ -1095,13 +1084,6 @@
             );
           x.gr = gv;
         }
-      } else if (X.jpm && xjI.value.trim() !== "") {
-        var jv = num(xjI.value);
-        if (!isFinite(jv) || jv < 30 || jv > 160)
-          errs.push(
-            "Jumps per minute must be a number from 30 to 160, or left blank to use the level above.",
-          );
-        x.j = jv;
       }
       var out = { errs: errs, min: m };
       if (!errs.length) {
