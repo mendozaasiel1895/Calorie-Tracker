@@ -246,3 +246,8 @@ th:last-child {
 [hidden] {
   display: none !important;
 }
+
+.btn:not(.del) {
+  display: block;
+  margin-left: auto;
+}
