@@ -161,19 +161,26 @@
   });
 
   /* ---------- calculations ---------- */
+  var MAX_SURPLUS = 500; /* kcal per day, steady gain limit */
   function compute(p) {
+    var type = p.type || "lose";
     var bmr = 10 * p.kg + 6.25 * p.cm - 5 * p.age + (p.sex === "m" ? 5 : -161);
     var tdee = bmr * ACT[p.act][0];
     var end = addMonths(p.start, p.months),
       days = diffDays(p.start, end);
-    var lose = p.kg - p.goal,
-      reqDef = (lose * KCAL_KG) / days;
+    var change = type === "maintain" ? 0 : Math.abs(p.goal - p.kg),
+      reqAdj = (change * KCAL_KG) / days;
     var floor = p.sex === "m" ? 1500 : 1200;
-    var cap = Math.min(1000, tdee - floor);
-    var def = Math.max(0, Math.min(reqDef, cap));
-    var ok = reqDef <= cap + 1e-9;
-    var target = tdee - def;
-    var projDays = def > 0 ? (lose * KCAL_KG) / def : Infinity;
+    var cap =
+      type === "lose"
+        ? Math.min(1000, tdee - floor)
+        : type === "gain"
+          ? MAX_SURPLUS
+          : 0;
+    var adj = Math.max(0, Math.min(reqAdj, cap));
+    var ok = reqAdj <= cap + 1e-9;
+    var target = type === "gain" ? tdee + adj : tdee - adj;
+    var projDays = adj > 0 ? (change * KCAL_KG) / adj : Infinity;
     var m = p.cm / 100,
       bmi = p.kg / (m * m),
       gbmi = p.goal / (m * m);
@@ -182,21 +189,21 @@
       fat = fatKcal / 9;
     var carbs = Math.max(0, (target - protein * 4 - fatKcal) / 4);
     return {
+      type: type,
       bmr: bmr,
       tdee: tdee,
       end: end,
       days: days,
-      lose: lose,
-      reqDef: reqDef,
-      def: def,
+      change: change,
+      reqAdj: reqAdj,
+      adj: adj,
       ok: ok,
       target: target,
       floor: floor,
-      weekly: (def * 7) / KCAL_KG,
+      weekly: (adj * 7) / KCAL_KG,
       projDays: projDays,
       bmi: bmi,
       gbmi: gbmi,
-      minKg: 18.5 * m * m,
       protein: protein,
       fat: fat,
       carbs: carbs,
@@ -283,7 +290,23 @@
     });
   });
   syncH();
+  function syncGoal() {
+    $("gw").parentNode.hidden = $("gl").value === "maintain";
+  }
+  $("gl").addEventListener("change", function () {
+    var t = $("gl").value,
+      wt = num($("wt").value),
+      g = num($("gw").value);
+    $("eat").value = t === "lose" ? "50" : "100";
+    if (isFinite(wt)) {
+      if (t === "gain" && !(g > wt)) $("gw").value = (wt * 1.05).toFixed(1);
+      else if (t === "lose" && !(g < wt)) $("gw").value = (wt * 0.9).toFixed(1);
+    }
+    syncGoal();
+  });
+  syncGoal();
   function fillForm(p) {
+    $("gl").value = p.type || "lose";
     $("sex").value = p.sex;
     $("age").value = p.age;
     $("wu").value = p.wu;
@@ -301,11 +324,13 @@
     $("sd").value = p.start;
     $("act").value = p.act;
     $("eat").value = p.eat;
+    syncGoal();
     syncH();
   }
   $("pf").addEventListener("submit", function (e) {
     e.preventDefault();
     var errs = [],
+      type = $("gl").value,
       wu = $("wu").value,
       hu = $("hu").value,
       k = wu === "lb" ? LB : 1;
@@ -325,6 +350,7 @@
         );
       cm = (ft * 12 + inch) * 2.54;
     }
+    if (type === "maintain") gw = wt;
     if (!isFinite(age) || age % 1 !== 0 || age < 18 || age > 80)
       errs.push(
         "Age must be a whole number from 18 to 80. This tool is for adults.",
@@ -338,18 +364,34 @@
     if (!isFinite(mo) || mo % 1 !== 0 || mo < 1 || mo > 24)
       errs.push("Duration must be a whole number of months from 1 to 24.");
     if (!validDate(sd)) errs.push("Enter a valid start date.");
-    if (!isFinite(gw) || gw / k < 1)
-      errs.push("Goal weight must be a number of at least 1.");
-    else if (isFinite(wt) && gw >= wt)
-      errs.push(
-        "Goal weight must be lower than current weight for a deficit plan.",
-      );
-    else if (isFinite(cm) && gw < 18.5 * Math.pow(cm / 100, 2) - 1e-9)
-      errs.push(
-        "Goal weight is below a BMI of 18.5 for your height. The lowest allowed is " +
-          wtxt(18.5 * Math.pow(cm / 100, 2), { wu: wu }) +
-          ".",
-      );
+    if (type !== "maintain") {
+      var m2 = Math.pow(cm / 100, 2);
+      if (!isFinite(gw) || gw / k < 1)
+        errs.push("Goal weight must be a number of at least 1.");
+      else if (type === "lose") {
+        if (isFinite(wt) && gw >= wt)
+          errs.push(
+            "Goal weight must be lower than your current weight to lose weight.",
+          );
+        else if (isFinite(cm) && gw < 18.5 * m2 - 1e-9)
+          errs.push(
+            "Goal weight is below a BMI of 18.5 for your height. The lowest allowed is " +
+              wtxt(18.5 * m2, { wu: wu }) +
+              ".",
+          );
+      } else {
+        if (isFinite(wt) && gw <= wt)
+          errs.push(
+            "Goal weight must be higher than your current weight to gain weight.",
+          );
+        else if (isFinite(cm) && gw > 30 * m2 + 1e-9)
+          errs.push(
+            "Goal weight is above a BMI of 30 for your height. The highest allowed is " +
+              wtxt(30 * m2, { wu: wu }) +
+              ".",
+          );
+      }
+    }
     var box = $("perr");
     if (errs.length) {
       clear(box);
@@ -372,6 +414,7 @@
       goal: gw,
       months: mo,
       start: sd,
+      type: type,
       act: +$("act").value,
       eat: +$("eat").value,
     };
@@ -401,41 +444,60 @@
     fillForm(p);
     var c = compute(p);
     var card = el("div", { cls: "card" }, el("h2", { text: "Your plan" }));
+    var type = c.type,
+      lose = type === "lose",
+      verb = lose ? "lose" : "gain";
     if (!c.ok)
       card.appendChild(
         el("div", {
           cls: "note w",
-          text:
-            "Reaching " +
-            wtxt(p.goal) +
-            " by " +
-            fd(c.end) +
-            " would need " +
-            r0(c.reqDef) +
-            " kcal below maintenance each day, which is past the safe limit for you. Intake is capped at " +
-            r0(c.tdee - c.def) +
-            " kcal per day (never below " +
-            c.floor +
-            " kcal). At that pace you would reach your goal in about " +
-            Math.ceil(c.projDays) +
-            " days, around " +
-            fd(addDays(p.start, Math.ceil(c.projDays))) +
-            ". Consider a longer duration or a higher goal weight.",
+          text: !isFinite(c.projDays)
+            ? "Your maintenance calories are at the minimum safe intake of " +
+              c.floor +
+              " kcal, so a deficit is not available."
+            : "Reaching " +
+              wtxt(p.goal) +
+              " by " +
+              fd(c.end) +
+              " would need " +
+              r0(c.reqAdj) +
+              " kcal " +
+              (lose ? "below" : "above") +
+              " maintenance each day, which is " +
+              (lose
+                ? "past the safe limit for you"
+                : "more than the " +
+                  MAX_SURPLUS +
+                  " kcal per day this app allows for a steady gain") +
+              ". Intake is capped at " +
+              r0(c.target) +
+              " kcal per day" +
+              (lose ? " (never below " + c.floor + " kcal)" : "") +
+              ". At that pace you would reach your goal in about " +
+              Math.ceil(c.projDays) +
+              " days, around " +
+              fd(addDays(p.start, Math.ceil(c.projDays))) +
+              ". Consider a longer duration or a closer goal weight.",
         }),
       );
-    if (c.weekly > 0.01 * p.kg)
+    if (type !== "maintain" && c.weekly > (lose ? 0.01 : 0.005) * p.kg)
       card.appendChild(
         el("div", {
           cls: "note w",
           text:
-            "This plan loses about " +
+            "This plan " +
+            (lose ? "loses" : "gains") +
+            " about " +
             c.weekly.toFixed(2) +
-            " kg per week, which is more than 1% of body weight. A slower pace is easier to sustain.",
+            " kg per week, which is more than " +
+            (lose ? "1%" : "0.5%") +
+            " of body weight. " +
+            (lose
+              ? "A slower pace is easier to sustain."
+              : "Faster gains tend to add more fat than muscle."),
         }),
       );
-    var t = el(
-      "table",
-      {},
+    var rows = [
       row(
         "Basal metabolic rate (Mifflin-St Jeor)",
         r0(c.bmr) + " kcal",
@@ -446,29 +508,52 @@
         r0(c.tdee) + " kcal",
         "Calories to hold your weight, before logged workouts",
       ),
-      row("Weight to lose", wtxt(c.lose)),
-      row("Plan length", c.days + " days", "Ends " + fd(c.end)),
-      row(
-        "Daily deficit used",
-        r0(c.def) + " kcal",
-        "Weight to lose x 7,700 kcal per kg, divided by days",
-      ),
-      row(
-        "Daily calorie target",
-        r0(c.target) + " kcal",
-        "Maintenance minus deficit",
-      ),
-      row("Expected loss per week", c.weekly.toFixed(2) + " kg"),
+    ];
+    if (type === "maintain") {
+      rows.push(
+        row("Goal", "Maintain " + wtxt(p.kg)),
+        row("Tracking period", c.days + " days", "Ends " + fd(c.end)),
+        row(
+          "Daily calorie target",
+          r0(c.target) + " kcal",
+          "Same as maintenance",
+        ),
+      );
+    } else {
+      rows.push(
+        row("Weight to " + verb, wtxt(c.change)),
+        row("Plan length", c.days + " days", "Ends " + fd(c.end)),
+        row(
+          "Daily " + (lose ? "deficit" : "surplus") + " used",
+          r0(c.adj) + " kcal",
+          "Weight to " + verb + " x 7,700 kcal per kg, divided by days",
+        ),
+        row(
+          "Daily calorie target",
+          r0(c.target) + " kcal",
+          "Maintenance " + (lose ? "minus deficit" : "plus surplus"),
+        ),
+        row(
+          "Expected " + (lose ? "loss" : "gain") + " per week",
+          c.weekly.toFixed(2) + " kg",
+        ),
+      );
+    }
+    rows.push(
       row("BMI now / at goal", c.bmi.toFixed(1) + " / " + c.gbmi.toFixed(1)),
       row("Protein", r0(c.protein) + " g", "1.6 g per kg of body weight"),
       row("Fat", r0(c.fat) + " g", "25% of target calories"),
       row("Carbs", r0(c.carbs) + " g", "The remaining calories"),
     );
+    var t = el("table", {});
+    rows.forEach(function (r) {
+      t.appendChild(r);
+    });
     card.appendChild(el("div", { cls: "scroll" }, t));
     card.appendChild(
       el("p", {
         cls: "mut",
-        text: "Estimates only. Real results vary, so use your weekly weigh-ins to adjust. If you have a medical condition, check with a doctor before a long deficit.",
+        text: "Estimates only. Real results vary, so use your weekly weigh-ins to adjust. If you have a medical condition, check with a doctor before changing your calorie intake for a long period.",
       }),
     );
     card.appendChild(
@@ -545,7 +630,8 @@
               : "Day " + dayN + " of " + c.days,
       }),
     );
-    var over = left < 0;
+    var gtype = p.type || "lose",
+      over = left < 0 && gtype !== "gain";
     dc.appendChild(
       el(
         "div",
@@ -554,7 +640,16 @@
           cls: "big num" + (over ? " over" : ""),
           text: String(r0(Math.abs(left))),
         }),
-        el("span", { text: over ? "kcal over budget" : "kcal left" }),
+        el("span", {
+          text:
+            left < 0
+              ? gtype === "gain"
+                ? "kcal above target"
+                : "kcal over budget"
+              : gtype === "gain"
+                ? "kcal to reach target"
+                : "kcal left",
+        }),
       ),
     );
     var pct = Math.min(100, bud > 0 ? (t.c / bud) * 100 : 0);
@@ -845,24 +940,32 @@
       }),
       cur = ws[ws.length - 1].kg;
     var sc = el("div", { cls: "card" }, el("h2", { text: "Weight" }));
-    var done = p.kg - cur,
-      pc = c.lose > 0 ? Math.max(0, Math.min(100, (done / c.lose) * 100)) : 0;
+    var ptype = p.type || "lose",
+      change = cur - p.kg,
+      toGo = ptype === "gain" ? p.goal - cur : cur - p.goal,
+      moved = ptype === "gain" ? change : -change,
+      total = Math.abs(p.goal - p.kg),
+      pc =
+        ptype !== "maintain" && total > 0
+          ? Math.max(0, Math.min(100, (moved / total) * 100))
+          : 0;
     sc.appendChild(
       el("p", {
         text:
           "Now " +
           wtxt(cur) +
           ". Change since start: " +
-          (done >= 0 ? "-" : "+") +
-          wtxt(Math.abs(done)) +
-          ". To goal: " +
-          wtxt(Math.max(0, cur - p.goal)) +
-          ".",
+          (change >= 0 ? "+" : "-") +
+          wtxt(Math.abs(change)) +
+          (ptype === "maintain"
+            ? ". Target: stay near " + wtxt(p.kg) + "."
+            : ". To goal: " + wtxt(Math.max(0, toGo)) + "."),
       }),
     );
-    sc.appendChild(
-      el("div", { cls: "bar" }, el("i", { style: "width:" + pc + "%" })),
-    );
+    if (ptype !== "maintain")
+      sc.appendChild(
+        el("div", { cls: "bar" }, el("i", { style: "width:" + pc + "%" })),
+      );
     var wf = el("form", { novalidate: "novalidate" });
     var g = el("div", { cls: "grid" });
     g.appendChild(
@@ -972,7 +1075,7 @@
       hc.appendChild(
         el("p", {
           cls: "mut",
-          text: "Net is eaten minus budget. Negative means you finished under budget.",
+          text: "Net is eaten minus budget. Negative means you ate less than your budget.",
         }),
       );
     }

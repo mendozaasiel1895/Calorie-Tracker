@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <title>Deficit Tracker</title>
+    <title>Calorie Tracker</title>
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;700&display=swap"
@@ -16,10 +16,10 @@
   </head>
   <body>
     <main>
-      <h1>Deficit Tracker</h1>
+      <h1>Calorie Tracker</h1>
       <p class="sub">
-        Set your plan, log food and exercise, track your weight. Everything
-        stays in this browser.
+        Lose, maintain, or gain weight. Set your plan, log food and exercise,
+        and track your weight. Everything stays in this browser.
       </p>
       <nav role="tablist">
         <button role="tab" data-t="plan" aria-selected="true">Plan</button>
@@ -33,6 +33,13 @@
         <form id="pf" class="card" novalidate>
           <h2>Your details</h2>
           <div class="grid">
+            <label
+              >Goal<select id="gl">
+                <option value="lose">Lose weight</option>
+                <option value="maintain">Maintain weight</option>
+                <option value="gain">Gain weight</option>
+              </select></label
+            >
             <label
               >Sex<select id="sex">
                 <option value="m">Male</option>
@@ -76,12 +83,12 @@
               >Duration (1 to 24 months)<input id="mo" step="1" value="6"
             /></label>
             <label>Start date<input id="sd" type="date" /></label>
-            <label>Daily life activity<select id="act"></select></label>
+            <label>Daily activity<select id="act"></select></label>
             <label
               >Eat back exercise calories<select id="eat">
                 <option value="0">0% (strict)</option>
-                <option value="50" selected>50% (recommended)</option>
-                <option value="100">100%</option>
+                <option value="50" selected>50% (good for losing)</option>
+                <option value="100">100% (good for gaining)</option>
               </select></label
             >
           </div>
