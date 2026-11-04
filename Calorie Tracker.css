@@ -1,0 +1,248 @@
+:root {
+  --bg: #f1f4f1;
+  --card: #fff;
+  --ink: #1b2a2f;
+  --mut: #5b6b70;
+  --acc: #0f6b63;
+  --accsoft: #dcefec;
+  --warn: #b93e0b;
+  --warnsoft: #fbe6dc;
+  --rule: #d3dbd7;
+  --r: 10px;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101a1c;
+    --card: #172427;
+    --ink: #e6efed;
+    --mut: #98aaa8;
+    --acc: #4fc1b4;
+    --accsoft: #173b3a;
+    --warn: #ff9a6b;
+    --warnsoft: #3a2217;
+    --rule: #2b3d40;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101a1c;
+  --card: #172427;
+  --ink: #e6efed;
+  --mut: #98aaa8;
+  --acc: #4fc1b4;
+  --accsoft: #173b3a;
+  --warn: #ff9a6b;
+  --warnsoft: #3a2217;
+  --rule: #2b3d40;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-padding-top: env(safe-area-inset-top, 0px);
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font:
+    16px/1.5 system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px;
+}
+h1,
+h2,
+.num {
+  font-family: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  letter-spacing: 0.2px;
+}
+h1 {
+  font-size: 28px;
+  margin: 8px 0 2px;
+}
+h2 {
+  font-size: 20px;
+  margin: 0 0 10px;
+}
+.sub {
+  color: var(--mut);
+  margin: 0 0 14px;
+}
+nav {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0;
+  border-bottom: 1px solid var(--rule);
+}
+nav button {
+  flex: 1;
+  background: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  padding: 10px 4px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--mut);
+  cursor: pointer;
+}
+nav button[aria-selected="true"] {
+  color: var(--acc);
+  border-bottom-color: var(--acc);
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--acc);
+  outline-offset: 1px;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+input,
+select {
+  width: 100%;
+  margin-top: 4px;
+  padding: 9px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+.row {
+  display: flex;
+  gap: 6px;
+}
+.btn {
+  background: var(--acc);
+  color: var(--bg);
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 12px;
+}
+.btn.alt {
+  background: none;
+  color: var(--ink);
+  border: 1px solid var(--rule);
+}
+.btn.del {
+  margin: 0;
+  padding: 2px 8px;
+  background: none;
+  color: var(--warn);
+  border: 1px solid var(--rule);
+}
+.err {
+  background: var(--warnsoft);
+  color: var(--warn);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 10px;
+}
+.err ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.note {
+  background: var(--accsoft);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+.note.w {
+  background: var(--warnsoft);
+  color: var(--warn);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+td,
+th {
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  vertical-align: top;
+}
+td:last-child,
+th:last-child {
+  text-align: right;
+}
+.scroll {
+  overflow-x: auto;
+}
+.hero {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.big {
+  font-size: 56px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--acc);
+}
+.big.over {
+  color: var(--warn);
+}
+.bar {
+  height: 12px;
+  background: var(--rule);
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+.bar i {
+  display: block;
+  height: 100%;
+  background: var(--acc);
+}
+.bar i.over {
+  background: var(--warn);
+}
+.mac {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 14px;
+}
+.mut {
+  color: var(--mut);
+  font-size: 14px;
+}
+[hidden] {
+  display: none !important;
+}
