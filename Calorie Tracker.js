@@ -59,6 +59,9 @@
     fb: 1,
     ff: 1,
     xm: 1,
+    xv: 1,
+    xr: 1,
+    xj: 1,
     ww: 1,
   };
   var INT_IDS = { age: 1, mo: 1 };
@@ -67,18 +70,22 @@
     if (NUM_IDS[t.id] === 1)
       t.setAttribute("inputmode", INT_IDS[t.id] ? "numeric" : "decimal");
   });
-  document.addEventListener("input", function (e) {
-    var t = e.target;
-    if (NUM_IDS[t.id] !== 1) return;
-    var v = t.value;
-    if (INT_IDS[t.id]) v = v.replace(/[^0-9]/g, "");
-    else {
-      v = v.replace(/[^0-9.]/g, "");
-      var i = v.indexOf(".");
-      if (i > -1) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, "");
-    }
-    if (v !== t.value) t.value = v;
-  });
+  document.addEventListener(
+    "input",
+    function (e) {
+      var t = e.target;
+      if (NUM_IDS[t.id] !== 1) return;
+      var v = t.value;
+      if (INT_IDS[t.id]) v = v.replace(/[^0-9]/g, "");
+      else {
+        v = v.replace(/[^0-9.]/g, "");
+        var i = v.indexOf(".");
+        if (i > -1) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, "");
+      }
+      if (v !== t.value) t.value = v;
+    },
+    true,
+  );
   function pad(n) {
     return (n < 10 ? "0" : "") + n;
   }
@@ -147,15 +154,157 @@
     [1.55, "Moderate: active job or lots of walking"],
     [1.725, "High: physically demanding work"],
   ];
-  var EX = [
-    ["Jump rope, moderate pace", 11.8],
-    ["Jump rope, fast pace", 12.3],
-    ["Bodyweight circuit, light to moderate", 3.5],
-    ["Bodyweight circuit, vigorous", 8],
-    ["Walking, brisk", 4.3],
-    ["Running, 8 km/h", 8.3],
-    ["Cycling, moderate", 7.5],
+  /* Exercise catalog: 2024 Adult Compendium of Physical Activities (gross METs).
+     Net burn = (MET - 1) x kg x hours, because maintenance calories already
+     count resting energy. Entries with k are speed based. */
+  var MPH = 1.609344; /* km/h per mph */
+  var HB = ["Beginner: moderate-effort intervals", 7.0];
+  var EXG = [
+    {
+      n: "Jump rope",
+      jpm: true,
+      lv: [
+        ["Beginner: 30 to 60 jumps per minute (estimate)", 6.0],
+        ["Intermediate: 60 to 100 jumps per minute", 8.8],
+        ["Advanced: 100 to 130 jumps per minute", 11.0],
+        ["Expert: 130 to 160 jumps per minute", 12.3],
+      ],
+    },
+    {
+      n: "Bodyweight and calisthenics (squats, push-ups, crunches, lunges)",
+      lv: [
+        ["Beginner: light effort (crunches, planks)", 2.8],
+        ["Intermediate: moderate effort (push-ups, sit-ups, lunges)", 3.8],
+        ["Advanced: high intensity", 6.5],
+        ["Expert: vigorous (burpees, jumping jacks, pull-ups)", 7.5],
+      ],
+    },
+    {
+      n: "Circuit training",
+      lv: [
+        ["Beginner: light effort", 3.5],
+        ["Intermediate: moderate effort", 5.0],
+        ["Advanced: bodyweight exercises", 6.0],
+        ["Expert: vigorous, minimal rest", 7.5],
+      ],
+    },
+    {
+      n: "Weight training",
+      subLabel: "Movement",
+      sub: ["Push", "Pull", "Legs"],
+      lv: [
+        ["Beginner: light to moderate, 8 to 15 reps", 3.5],
+        ["Intermediate: heavy compound lifts, slow or explosive", 5.0],
+        ["Advanced: supersets or short rests", 5.8],
+        ["Expert: vigorous powerlifting or bodybuilding", 6.0],
+      ],
+    },
+    {
+      n: "High intensity interval training (HIIT)",
+      subLabel: "HIIT type",
+      sub: [
+        "Cardio",
+        "Bodyweight (calisthenics)",
+        "With free weights",
+        "Machine-based",
+        "Plyometric",
+        "Swimming or hybrid",
+      ],
+      lvBy: [
+        [
+          HB,
+          ["Intermediate: spin-class intensity", 9.0],
+          ["Expert: vigorous intervals, Tabata-style", 11.0],
+        ],
+        [
+          HB,
+          ["Intermediate: vigorous calisthenics pace", 7.5],
+          ["Expert: burpees, mountain climbers, squat jumps", 11.0],
+        ],
+        [
+          HB,
+          ["Intermediate: kettlebell circuit, minimal rest", 7.5],
+          ["Expert: kettlebell swings, vigorous", 9.8],
+        ],
+        [
+          HB,
+          ["Intermediate: elliptical or spin bike, vigorous", 9.0],
+          ["Expert: rowing machine, 150 to 199 W", 11.0],
+        ],
+        [
+          HB,
+          ["Intermediate: jumping at about 120 per minute", 9.0],
+          ["Expert: squat jumps, burpees, Tabata", 11.0],
+        ],
+        [
+          HB,
+          ["Intermediate: fast freestyle laps", 9.8],
+          ["Expert: vigorous hybrid intervals", 11.0],
+        ],
+      ],
+    },
+    { n: "Walking (by speed)", k: "walk", lo: 3, hi: 6 },
+    { n: "Running or jogging (by speed)", k: "run", lo: 6, hi: 25 },
+    { n: "Cycling outdoors (by speed)", k: "cyc", lo: 8, hi: 50 },
   ];
+  /* Cycling: Compendium 2024 values placed at the middle of each speed band
+     (mph, gross MET); values between points are linearly interpolated. */
+  var CYC = [
+    [5.5, 3.5],
+    [9.4, 5.8],
+    [10.95, 6.8],
+    [12.95, 8.0],
+    [14.95, 10.0],
+    [17.5, 12.0],
+    [20, 16.8],
+  ];
+  function cycMet(mph) {
+    if (mph <= CYC[0][0]) return CYC[0][1];
+    for (var i = 1; i < CYC.length; i++) {
+      if (mph <= CYC[i][0]) {
+        var a = CYC[i - 1],
+          b = CYC[i];
+        return a[1] + ((b[1] - a[1]) * (mph - a[0])) / (b[0] - a[0]);
+      }
+    }
+    return CYC[CYC.length - 1][1];
+  }
+  /* x = { a: activity, t: type index, i: level index, j: jumps per minute,
+     sp: km/h, gr: grade %}. Walking and running use the ACSM metabolic
+     equations; the net oxygen cost is the part above the resting 3.5 ml/kg/min,
+     divided by 3.5 to give METs. */
+  function exCalc(x) {
+    var X = EXG[x.a],
+      S_ = ((x.sp || 0) * 1000) / 60,
+      G = (x.gr || 0) / 100,
+      net,
+      label;
+    if (!X.k) {
+      var lv = X.lv || X.lvBy[x.t],
+        i = Math.min(Math.max(x.i || 0, 0), lv.length - 1);
+      if (X.jpm && x.j) {
+        i = x.j < 60 ? 0 : x.j < 100 ? 1 : x.j < 130 ? 2 : 3;
+        label = X.n + ", " + x.j + " jumps per minute";
+      } else {
+        label = X.n + (X.sub ? " (" + X.sub[x.t] + ")" : "") + ", " + lv[i][0];
+      }
+      net = lv[i][1] - 1;
+    } else if (X.k === "cyc") {
+      net = cycMet(x.sp / MPH) - 1;
+      label = "Cycling at " + +x.sp.toFixed(1) + " km/h";
+    } else {
+      net =
+        (X.k === "walk" ? 0.1 * S_ + 1.8 * S_ * G : 0.2 * S_ + 0.9 * S_ * G) /
+        3.5;
+      label =
+        (X.k === "walk" ? "Walking" : "Running") +
+        " at " +
+        +x.sp.toFixed(1) +
+        " km/h" +
+        (x.gr ? ", " + x.gr + "% grade" : "");
+    }
+    return { net: net, gross: net + 1, label: label };
+  }
   ACT.forEach(function (a, i) {
     $("act").appendChild(el("option", { value: i, text: a[1] }));
   });
@@ -179,7 +328,13 @@
           : 0;
     var adj = Math.max(0, Math.min(reqAdj, cap));
     var ok = reqAdj <= cap + 1e-9;
-    var target = type === "gain" ? tdee + adj : tdee - adj;
+    var baseTarget = type === "gain" ? tdee + adj : tdee - adj,
+      target = baseTarget;
+    if (p.tweak) {
+      var lo = type === "gain" ? tdee : floor,
+        hi = type === "lose" ? tdee : tdee + MAX_SURPLUS;
+      target = Math.min(hi, Math.max(lo, baseTarget + p.tweak));
+    }
     var projDays = adj > 0 ? (change * KCAL_KG) / adj : Infinity;
     var m = p.cm / 100,
       bmi = p.kg / (m * m),
@@ -200,7 +355,8 @@
       ok: ok,
       target: target,
       floor: floor,
-      weekly: (adj * 7) / KCAL_KG,
+      tweak: target - baseTarget,
+      weekly: type === "maintain" ? 0 : (Math.abs(target - tdee) * 7) / KCAL_KG,
       projDays: projDays,
       bmi: bmi,
       gbmi: gbmi,
@@ -209,14 +365,15 @@
       carbs: carbs,
     };
   }
-  function latestKg() {
-    var w = S.weights.slice().sort(function (a, b) {
-      return a.d < b.d ? -1 : 1;
+  /* Weigh-in on or before the date; before the first weigh-in, the first one. */
+  function weightOn(d) {
+    var best = null,
+      first = null;
+    S.weights.forEach(function (w) {
+      if (w.d <= d && (!best || w.d > best.d)) best = w;
+      if (!first || w.d < first.d) first = w;
     });
-    return w.length ? w[w.length - 1].kg : S.plan.kg;
-  }
-  function exKcal(met, kg, min) {
-    return (met * kg * min) / 60;
+    return best ? best.kg : first ? first.kg : S.plan.kg;
   }
   function dayLog(d) {
     return S.logs[d] || (S.logs[d] = { f: [], x: [] });
@@ -539,6 +696,14 @@
         ),
       );
     }
+    if (Math.abs(c.tweak) >= 0.5)
+      rows.push(
+        row(
+          "Weekly-check adjustment",
+          (c.tweak > 0 ? "+" : "-") + Math.abs(r0(c.tweak)) + " kcal",
+          "Already included in the daily calorie target",
+        ),
+      );
     rows.push(
       row("BMI now / at goal", c.bmi.toFixed(1) + " / " + c.gbmi.toFixed(1)),
       row("Protein", r0(c.protein) + " g", "1.6 g per kg of body weight"),
@@ -817,50 +982,169 @@
       el("h2", { text: "Add exercise" }),
     );
     var xg = el("div", { cls: "grid" });
-    var xs = el("select", { id: "xa" });
-    EX.forEach(function (x, i) {
-      xs.appendChild(el("option", { value: i, text: x[0] }));
+    var exKg = weightOn(d),
+      xs = el("select", { id: "xa" }),
+      xt = el("select", { id: "xt" }),
+      xi = el("select", { id: "xi" }),
+      xu = el("select", { id: "xu" }),
+      xjI = el("input", { id: "xj" }),
+      xvI = el("input", { id: "xv" }),
+      xrI = el("input", { id: "xr" }),
+      xmI = el("input", { id: "xm", value: "30" });
+    EXG.forEach(function (x, i) {
+      xs.appendChild(el("option", { value: i, text: x.n }));
     });
+    xu.appendChild(el("option", { value: "kmh", text: "km/h" }));
+    xu.appendChild(el("option", { value: "mph", text: "mph" }));
+    var lTt = el("span", { text: "Type" }),
+      lT = el("label", {}, lTt, xt),
+      lI = el("label", { text: "Level" }, xi),
+      lJ = el("label", { text: "Jumps per minute (optional, 30 to 160)" }, xjI),
+      lV = el("label", { text: "Speed" }, xvI),
+      lU = el("label", { text: "Speed unit" }, xu),
+      lR = el("label", { text: "Grade % (optional, 1 to 15)" }, xrI);
     xg.appendChild(el("label", { text: "Activity" }, xs));
-    xg.appendChild(
-      el(
-        "label",
-        { text: "Minutes (1 to 600)" },
-        el("input", {
-          id: "xm",
-
-          step: "any",
-          value: "30",
-        }),
-      ),
-    );
+    [lT, lI, lJ, lV, lU, lR].forEach(function (n) {
+      xg.appendChild(n);
+    });
+    xg.appendChild(el("label", { text: "Minutes (1 to 600)" }, xmI));
     xc.appendChild(xg);
     var xe = el("div", { cls: "err", hidden: "hidden" });
     xc.appendChild(xe);
+    var xp = el("p", { text: "" });
+    xc.appendChild(xp);
     xc.appendChild(
       el("p", {
         cls: "mut",
         text:
-          "Burn = MET x body weight (kg) x hours, using your latest weigh-in of " +
-          wtxt(latestKg()) +
-          ".",
+          "Burn = (MET - 1) x weight (kg) x hours, using your weigh-in of " +
+          wtxt(exKg) +
+          ". Levels use the 2024 Compendium of Physical Activities; values marked estimate are not published. Enter the total session time, rest breaks included. Estimates can be off by a wide margin for one person.",
       }),
     );
     xc.appendChild(
       el("button", { cls: "btn", type: "submit", text: "Add exercise" }),
     );
+    function syncEx() {
+      var X = EXG[+xs.value];
+      if (X.sub && xt.getAttribute("data-a") !== xs.value) {
+        clear(xt);
+        X.sub.forEach(function (s, i) {
+          xt.appendChild(el("option", { value: i, text: s }));
+        });
+        xt.setAttribute("data-a", xs.value);
+        lTt.textContent = X.subLabel;
+      }
+      lT.hidden = !X.sub;
+      lJ.hidden = !X.jpm;
+      if (!X.k) {
+        var key = xs.value + "/" + (X.lvBy ? xt.value : ""),
+          keep = +xi.value || 0;
+        if (xi.getAttribute("data-k") !== key) {
+          var lv = X.lv || X.lvBy[+xt.value || 0];
+          clear(xi);
+          lv.forEach(function (m, i) {
+            xi.appendChild(
+              el("option", { value: i, text: m[0] + " (" + m[1] + " MET)" }),
+            );
+          });
+          xi.value = String(Math.min(keep, lv.length - 1));
+          xi.setAttribute("data-k", key);
+        }
+      }
+      lI.hidden = !!X.k;
+      lV.hidden = !X.k;
+      lU.hidden = !X.k;
+      lR.hidden = !(X.k === "walk" || X.k === "run");
+    }
+    function readEx() {
+      var errs = [],
+        X = EXG[+xs.value],
+        m = num(xmI.value),
+        x = {
+          a: +xs.value,
+          t: +xt.value || 0,
+          i: +xi.value || 0,
+          sp: 0,
+          gr: 0,
+          j: 0,
+        };
+      if (!isFinite(m) || m < 1 || m > 600)
+        errs.push("Minutes must be between 1 and 600.");
+      if (X.k) {
+        var sp = num(xvI.value),
+          kmh = xu.value === "mph" ? sp * MPH : sp;
+        if (!isFinite(sp) || kmh < X.lo - 1e-9 || kmh > X.hi + 1e-9)
+          errs.push(
+            "Speed must be a number from " +
+              X.lo +
+              " to " +
+              X.hi +
+              " km/h (" +
+              (X.lo / MPH).toFixed(1) +
+              " to " +
+              (X.hi / MPH).toFixed(1) +
+              " mph) for this activity.",
+          );
+        x.sp = kmh;
+        if (X.k !== "cyc" && xrI.value.trim() !== "") {
+          var gv = num(xrI.value);
+          if (!isFinite(gv) || gv < 1 || gv > 15)
+            errs.push(
+              "Grade must be a number from 1 to 15, or left blank for flat ground.",
+            );
+          x.gr = gv;
+        }
+      } else if (X.jpm && xjI.value.trim() !== "") {
+        var jv = num(xjI.value);
+        if (!isFinite(jv) || jv < 30 || jv > 160)
+          errs.push(
+            "Jumps per minute must be a number from 30 to 160, or left blank to use the level above.",
+          );
+        x.j = jv;
+      }
+      var out = { errs: errs, min: m };
+      if (!errs.length) {
+        out.calc = exCalc(x);
+        out.kcal = (out.calc.net * exKg * m) / 60;
+      }
+      return out;
+    }
+    function upd() {
+      var r = readEx();
+      xp.textContent = r.errs.length
+        ? "Estimated burn: enter valid values to see it."
+        : "Estimated burn: " +
+          r0(r.kcal) +
+          " kcal (net " +
+          r.calc.net.toFixed(1) +
+          " MET).";
+    }
+    xc.addEventListener("input", upd);
+    xc.addEventListener("change", function () {
+      syncEx();
+      upd();
+    });
     xc.addEventListener("submit", function (e) {
       e.preventDefault();
-      var m = num($("xm").value),
-        ex = EX[+$("xa").value];
-      if (!isFinite(m) || m < 1 || m > 600) {
-        showErr(xe, ["Minutes must be between 1 and 600."]);
+      var r = readEx();
+      if (r.errs.length) {
+        showErr(xe, r.errs);
         return;
       }
-      L.x.push({ n: ex[0], min: m, k: exKcal(ex[1], latestKg(), m) });
+      L.x.push({
+        n: r.calc.label,
+        min: r.min,
+        k: r.kcal,
+        met: r.calc.gross,
+        net: r.calc.net,
+        w: exKg,
+      });
       save();
       renderToday();
     });
+    syncEx();
+    upd();
     host.appendChild(xc);
     host.appendChild(
       listCard(
@@ -928,6 +1212,337 @@
     return c;
   }
 
+  /* ---------- weight chart ---------- */
+  var NS = "http://www.w3.org/2000/svg";
+  function sv(t, a) {
+    var n = document.createElementNS(NS, t);
+    a = a || {};
+    for (var k in a) {
+      if (k === "text") n.textContent = a[k];
+      else n.setAttribute(k, a[k]);
+    }
+    for (var i = 2; i < arguments.length; i++)
+      if (arguments[i]) n.appendChild(arguments[i]);
+    return n;
+  }
+  /* Dots: weigh-ins. Solid line: average of the weigh-ins in the 7 days up to
+     each one. Dashed line: straight path from start weight to goal. */
+  function weightChart(p, c, ws) {
+    var W = 640,
+      H = 260,
+      L = 52,
+      R = 14,
+      T = 14,
+      B = 30,
+      pw = W - L - R,
+      ph = H - T - B;
+    var d0 = ws[0].d < p.start ? ws[0].d : p.start,
+      last = ws[ws.length - 1].d,
+      d1 = last > c.end ? last : c.end,
+      span = Math.max(1, diffDays(d0, d1)),
+      goalKg = p.type === "maintain" ? p.kg : p.goal;
+    var ys = ws
+        .map(function (w) {
+          return w.kg;
+        })
+        .concat([p.kg, goalKg]),
+      lo = Math.min.apply(null, ys),
+      hi = Math.max.apply(null, ys),
+      pad = Math.max(0.5, (hi - lo) * 0.15);
+    lo -= pad;
+    hi += pad;
+    function X(d) {
+      return L + (pw * diffDays(d0, d)) / span;
+    }
+    function Y(kg) {
+      return T + ph * (1 - (kg - lo) / (hi - lo));
+    }
+    function disp(kg) {
+      return (p.wu === "lb" ? kg / LB : kg).toFixed(1);
+    }
+    var txt = "fill:var(--mut);font:11px system-ui,sans-serif";
+    var svg = sv("svg", {
+      viewBox: "0 0 " + W + " " + H,
+      role: "img",
+      style: "width:100%;height:auto",
+      "aria-label":
+        "Weight chart with " +
+        ws.length +
+        " weigh-ins, from " +
+        wtxt(ws[0].kg) +
+        " to " +
+        wtxt(ws[ws.length - 1].kg) +
+        ".",
+    });
+    for (var i = 0; i < 4; i++) {
+      var v = lo + ((hi - lo) * i) / 3,
+        y = Y(v);
+      svg.appendChild(
+        sv("line", {
+          x1: L,
+          x2: W - R,
+          y1: y,
+          y2: y,
+          style: "stroke:var(--rule);stroke-width:1",
+        }),
+      );
+      svg.appendChild(
+        sv("text", {
+          x: L - 6,
+          y: y + 4,
+          "text-anchor": "end",
+          style: txt,
+          text: disp(v),
+        }),
+      );
+    }
+    svg.appendChild(
+      sv("text", {
+        x: L,
+        y: H - 8,
+        "text-anchor": "start",
+        style: txt,
+        text: fd(d0),
+      }),
+    );
+    svg.appendChild(
+      sv("text", {
+        x: W - R,
+        y: H - 8,
+        "text-anchor": "end",
+        style: txt,
+        text: fd(d1),
+      }),
+    );
+    svg.appendChild(
+      sv("line", {
+        x1: X(p.start),
+        y1: Y(p.kg),
+        x2: X(c.end),
+        y2: Y(goalKg),
+        style: "stroke:var(--mut);stroke-width:2;stroke-dasharray:6 5",
+      }),
+    );
+    var pts = ws.map(function (w) {
+      var s = 0,
+        n = 0;
+      ws.forEach(function (o) {
+        var dd = diffDays(o.d, w.d);
+        if (dd >= 0 && dd <= 6) {
+          s += o.kg;
+          n++;
+        }
+      });
+      return X(w.d).toFixed(1) + "," + Y(s / n).toFixed(1);
+    });
+    svg.appendChild(
+      sv("polyline", {
+        points: pts.join(" "),
+        style:
+          "fill:none;stroke:var(--acc);stroke-width:3;stroke-linejoin:round",
+      }),
+    );
+    ws.forEach(function (w) {
+      svg.appendChild(
+        sv("circle", {
+          cx: X(w.d),
+          cy: Y(w.kg),
+          r: 3.5,
+          style: "fill:var(--card);stroke:var(--acc);stroke-width:2",
+        }),
+      );
+    });
+    return svg;
+  }
+
+  /* ---------- weekly check ---------- */
+  function sgn(v) {
+    return (v >= 0 ? "+" : "-") + Math.abs(r0(v));
+  }
+  function weeklyCheck(p, c, ws) {
+    var card = el("div", { cls: "card" }, el("h2", { text: "Weekly check" }));
+    var note = function (t) {
+      card.appendChild(el("p", { cls: "mut", text: t }));
+    };
+    var td = todayStr(),
+      from = addDays(td, -20);
+    if (from < p.start) from = p.start;
+    if (p.tweakDate && p.tweakDate > from) from = p.tweakDate;
+    if (p.tweak)
+      note(
+        "Current adjustment: " +
+          sgn(p.tweak) +
+          " kcal per day, applied on " +
+          fd(p.tweakDate || p.start) +
+          ". The check below only uses data from that date.",
+      );
+    var win = ws.filter(function (w) {
+        return w.d >= from && w.d <= td;
+      }),
+      span = win.length ? diffDays(win[0].d, win[win.length - 1].d) : 0;
+    function undo() {
+      if (!p.tweak) return;
+      card.appendChild(
+        el("button", {
+          cls: "btn alt",
+          type: "button",
+          text: "Remove adjustment",
+          on: [
+            "click",
+            function () {
+              delete p.tweak;
+              delete p.tweakDate;
+              save();
+              renderProg();
+            },
+          ],
+        }),
+      );
+    }
+    if (win.length < 3 || span < 14) {
+      note(
+        "Not enough data yet. The check needs at least 3 weigh-ins in the last 21 days, with the first and last at least 14 days apart. Weighing in 2 to 3 times a week works best.",
+      );
+      undo();
+      return card;
+    }
+    var n = win.length,
+      sx = 0,
+      sy = 0,
+      sxy = 0,
+      sxx = 0;
+    win.forEach(function (w) {
+      var x = diffDays(win[0].d, w.d);
+      sx += x;
+      sy += w.kg;
+      sxy += x * w.kg;
+      sxx += x * x;
+    });
+    var rate =
+        ((n * sxy - sx * sy) / (n * sxx - sx * sx)) * 7 /* kg per week */,
+      obs = (rate * KCAL_KG) / 7; /* kcal per day */
+    var days = [],
+      k = diffDays(from, td);
+    for (var i = 0; i < k; i++) {
+      var d = addDays(from, i);
+      if (S.logs[d] && S.logs[d].f.length) days.push(d);
+    }
+    note(
+      "Weight trend over the last " +
+        (span + 1) +
+        " days: " +
+        (rate >= 0 ? "+" : "-") +
+        wtxt(Math.abs(rate)) +
+        " per week.",
+    );
+    if (days.length < 7) {
+      note(
+        "Log food on at least 7 of these days so the check can tell whether the gap comes from eating or from the plan. You have " +
+          days.length +
+          ".",
+      );
+      undo();
+      return card;
+    }
+    var eaten = 0,
+      burn = 0,
+      bud = 0;
+    days.forEach(function (d) {
+      var t = totals(d);
+      eaten += t.c;
+      burn += t.b;
+      bud += budget(d);
+    });
+    eaten /= days.length;
+    burn /= days.length;
+    bud /= days.length;
+    var want =
+        c.target -
+        c.tdee -
+        (1 - p.eat / 100) * burn /* planned kcal balance per day */,
+      exp = (want * 7) / KCAL_KG;
+    note(
+      "Expected from your plan and workouts: " +
+        (exp >= 0 ? "+" : "-") +
+        wtxt(Math.abs(exp)) +
+        " per week. Average eaten " +
+        r0(eaten) +
+        " kcal against a budget of " +
+        r0(bud) +
+        " kcal, over " +
+        days.length +
+        " logged days.",
+    );
+    var diff = obs - want;
+    if (Math.abs(diff) < 200) {
+      card.appendChild(
+        el("div", {
+          cls: "note",
+          text: "On track. Your weight trend matches the plan, so no change is needed.",
+        }),
+      );
+    } else if (Math.abs(eaten - bud) > 150) {
+      card.appendChild(
+        el("div", {
+          cls: "note w",
+          text:
+            "You ate about " +
+            Math.abs(r0(eaten - bud)) +
+            " kcal per day " +
+            (eaten > bud ? "more" : "less") +
+            " than your budget, which likely explains the gap. Stay close to the budget for another week or two before changing the plan.",
+        }),
+      );
+    } else {
+      var step = Math.max(-250, Math.min(250, Math.round(-diff / 25) * 25)),
+        nc = compute(Object.assign({}, p, { tweak: (p.tweak || 0) + step })),
+        eff = nc.target - c.target;
+      card.appendChild(
+        el("div", {
+          cls: "note w",
+          text:
+            "Your weight is trending about " +
+            Math.abs(r0(diff)) +
+            " kcal per day " +
+            (diff > 0 ? "higher" : "lower") +
+            " than the plan expects, even though you stayed on budget.",
+        }),
+      );
+      if (Math.abs(eff) < 1) {
+        note(
+          "Your target is already at its limit, so no further change is possible. Consider a longer duration or a different goal weight.",
+        );
+      } else {
+        note(
+          "Suggested change: " +
+            sgn(eff) +
+            " kcal per day, for a new target of " +
+            r0(nc.target) +
+            " kcal. Daily weight swings of 1 to 2 kg from water are normal, so treat this as a guide.",
+        );
+        card.appendChild(
+          el("button", {
+            cls: "btn",
+            type: "button",
+            text: "Apply suggested change",
+            on: [
+              "click",
+              function () {
+                p.tweak = (p.tweak || 0) + step;
+                p.tweakDate = td;
+                save();
+                renderProg();
+              },
+            ],
+          }),
+        );
+      }
+    }
+    undo();
+    note("Changing your plan details resets this adjustment.");
+    return card;
+  }
+
   /* ---------- progress ---------- */
   function renderProg() {
     var host = $("prog");
@@ -966,6 +1581,22 @@
       sc.appendChild(
         el("div", { cls: "bar" }, el("i", { style: "width:" + pc + "%" })),
       );
+    if (ws.length >= 2) {
+      sc.appendChild(weightChart(p, c, ws));
+      sc.appendChild(
+        el("p", {
+          cls: "mut",
+          text: "Dots are weigh-ins, the solid line is the 7-day average, and the dashed line is your plan.",
+        }),
+      );
+    } else {
+      sc.appendChild(
+        el("p", {
+          cls: "mut",
+          text: "Add a second weigh-in to see your weight chart.",
+        }),
+      );
+    }
     var wf = el("form", { novalidate: "novalidate" });
     var g = el("div", { cls: "grid" });
     g.appendChild(
@@ -1029,6 +1660,7 @@
       });
     sc.appendChild(el("div", { cls: "scroll" }, t));
     host.appendChild(sc);
+    host.appendChild(weeklyCheck(p, c, ws));
 
     var hc = el("div", { cls: "card" }, el("h2", { text: "Last 14 days" }));
     var ht = el(

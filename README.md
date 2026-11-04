@@ -11,7 +11,9 @@ No server, no account, no build step. Your data stays in your browser's local st
 - **Daily calorie target and macros** (protein, fat, carbs)
 - **Daily log** with food entries (calories plus optional macros) and exercise entries
 - **Live budget** showing calories left or over, with a progress bar and "Day X of Y" counter
-- **Exercise calories** estimated from MET values and your latest weight
+- **Exercise calories** from the 2024 Compendium of Physical Activities: pick an activity and intensity, or enter speed (and grade) for walking, running, and cycling
+- **Weight chart** with your weigh-ins, a 7-day average line, and your planned path
+- **Weekly check** that compares your weight trend with the plan and suggests a target adjustment you can apply or ignore
 - **Weight tracking** with progress toward your goal
 - **14-day history** of eaten vs. budget
 - **Unit support**: kg or lb, cm or ft + in
@@ -34,7 +36,7 @@ cd <your-repo>
 
 1. **Plan tab**: pick your goal, fill in your details, and click **Calculate and save plan**. The app shows your BMR, maintenance calories, daily deficit or surplus, calorie target, expected weekly loss, BMI, and macro targets.
 2. **Daily log tab**: pick a date, then add what you ate and any exercise. The large number shows calories left in today's budget.
-3. **Progress tab**: save weigh-ins, see how far you are from your goal, and review the last 14 days.
+3. **Progress tab**: save weigh-ins, see your weight chart and how far you are from your goal, read the weekly check, and review the last 14 days.
 
 ### Eat back exercise calories
 
@@ -68,7 +70,7 @@ Because your maintenance calories do not include logged workouts, your budget go
 | Protein                  | The smaller of `1.6 g × kg` and 35% of target calories ÷ 4                  |
 | Fat                      | 25% of target calories ÷ 9                                                  |
 | Carbs                    | Remaining calories ÷ 4                                                      |
-| Exercise burn            | `MET × kg × minutes ÷ 60`, using your latest weigh-in                       |
+| Exercise burn            | `(MET − 1) × kg × minutes ÷ 60`, using your weigh-in on or before that date |
 | Daily budget             | `target + eat-back % × exercise burn`                                       |
 
 If the goal can't be reached safely in the chosen time, the app caps the deficit or surplus and shows a realistic finish date instead. It also warns when a plan loses more than 1% of body weight per week or gains more than 0.5% per week.
@@ -81,33 +83,73 @@ If the goal can't be reached safely in the chosen time, the app caps the deficit
 | Gain to 95 kg | about 213 kcal surplus | about 2,465 kcal |
 | Maintain      | none                   | about 2,253 kcal |
 
-### Exercise MET values
+### Exercise calories
 
-| Activity                              | MET  |
-| ------------------------------------- | ---- |
-| Jump rope, moderate                   | 11.8 |
-| Jump rope, fast                       | 12.3 |
-| Bodyweight circuit, light to moderate | 3.5  |
-| Bodyweight circuit, vigorous          | 8.0  |
-| Walking, brisk                        | 4.3  |
-| Running, 8 km/h                       | 8.3  |
-| Cycling, moderate                     | 7.5  |
+Burn is **net**: `(MET − 1) × kg × hours`. Your maintenance calories already include resting energy, so the 1 MET of rest is removed to avoid counting it twice. Enter total session time, rest breaks included. Estimates can be off by a wide margin for any one person, which is why the eat-back setting defaults to 50%.
+
+Every activity has levels from beginner to expert. Values are gross METs from the 2024 Adult Compendium of Physical Activities unless marked.
+
+| Activity                                                  | Beginner                     | Intermediate             | Advanced                     | Expert                                    |
+| --------------------------------------------------------- | ---------------------------- | ------------------------ | ---------------------------- | ----------------------------------------- |
+| Jump rope (jumps per minute, or type your own: 30 to 160) | 30 to 60: **6.0 (estimate)** | 60 to 100: 8.8           | 100 to 130: 11.0             | 130 to 160: 12.3                          |
+| Bodyweight and calisthenics                               | Light 2.8                    | Moderate 3.8             | High intensity 6.5           | Vigorous 7.5                              |
+| Circuit training                                          | Light 3.5                    | Moderate 5.0             | Bodyweight exercises 6.0     | Vigorous, minimal rest 7.5                |
+| Weight training (push, pull, or legs)                     | 8 to 15 reps 3.5             | Heavy compound lifts 5.0 | Supersets or short rests 5.8 | Vigorous powerlifting or bodybuilding 6.0 |
+
+HIIT, by type (beginner is always moderate-effort intervals at 7.0, the lowest published HIIT value):
+
+| HIIT type                 | Intermediate                        | Expert                                       |
+| ------------------------- | ----------------------------------- | -------------------------------------------- |
+| Cardio                    | Spin-class intensity 9.0            | Vigorous, Tabata-style 11.0                  |
+| Bodyweight (calisthenics) | Vigorous calisthenics pace 7.5      | Burpees, mountain climbers, squat jumps 11.0 |
+| With free weights         | Kettlebell circuit 7.5              | Kettlebell swings 9.8                        |
+| Machine-based             | Elliptical or spin bike 9.0         | Rowing machine, 150 to 199 W 11.0            |
+| Plyometric                | Jumping at about 120 per minute 9.0 | Squat jumps, burpees, Tabata 11.0            |
+| Swimming or hybrid        | Fast freestyle laps 9.8             | Vigorous intervals 11.0                      |
+
+Where the numbers come from:
+
+- **Published 2024 values:** most rows above. Jump rope 100 to 130 uses "rope skipping, general" (11.0).
+- **Older 2011 values:** jump rope 60 to 100 (8.8) and 130 to 160 (12.3). I could not confirm them in the 2024 list.
+- **Estimate:** jump rope 30 to 60 is not published anywhere, so 6.0 is an estimate. It is shown as "(estimate)" in the app.
+- **Mapped by judgment:** the Compendium does not split weight training by push or pull (the field is saved with the entry for your records), and it has no HIIT entries by type. HIIT types use the nearest published activity (spin class, elliptical, rowing, kettlebell circuits and swings, fast freestyle swimming). The swimming value comes from a third-party chart of the Compendium.
+- **Speed-based activities** (below) already cover beginner to expert pace, so they have no level menu.
+
+**Speed-based activities**
+
+| Activity           | Method                                                                         | Speed range  |
+| ------------------ | ------------------------------------------------------------------------------ | ------------ |
+| Walking            | ACSM walking equation, optional grade                                          | 3 to 6 km/h  |
+| Running or jogging | ACSM running equation, optional grade                                          | 6 to 25 km/h |
+| Cycling outdoors   | 2024 Compendium METs by speed, interpolated between bands (flat road, no wind) | 8 to 50 km/h |
+
+ACSM equations, with speed `S` in metres per minute and grade `G` as a fraction: walking uses `0.1 × S + 1.8 × S × G` and running uses `0.2 × S + 0.9 × S × G`. Both give the oxygen cost above rest in ml/kg/min, and dividing by 3.5 gives net METs.
+
+### Weekly check
+
+On the Progress tab, the app fits a line through your weigh-ins from the last 21 days (at least 3 weigh-ins, at least 14 days apart) and compares the weight trend with what your plan and logged workouts predict. It needs food logged on at least 7 of those days.
+
+- **Within 200 kcal per day of the plan:** you are on track.
+- **Average intake more than 150 kcal from your budget:** the gap is probably eating, so no change is suggested.
+- **Otherwise:** it suggests a change of up to 250 kcal per day, kept within the safe limits (calorie floor, 500 kcal surplus cap). Nothing changes unless you click **Apply suggested change**, and you can remove it later. After applying, the check restarts from that date. Saving your plan details again clears the adjustment.
 
 ## Input validation
 
-| Field               | Rule                                                                                                                                                            |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Age                 | Whole number, 18 to 80                                                                                                                                          |
-| Height              | 120 to 230 cm. In ft + in mode, feet at least 1 and inches 0 to 11.9                                                                                            |
-| Current weight      | 35 to 300 kg (77 to 661 lb)                                                                                                                                     |
-| Goal weight         | At least 1. Lose: lower than current weight and not below a BMI of 18.5. Gain: higher than current weight and not above a BMI of 30. Not asked when maintaining |
-| Duration            | Whole number, 1 to 24 months                                                                                                                                    |
-| Start date          | A valid date                                                                                                                                                    |
-| Food name           | 1 to 60 characters                                                                                                                                              |
-| Food calories       | 1 to 5,000 per entry                                                                                                                                            |
-| Protein, carbs, fat | Blank, or 1 to 500 g                                                                                                                                            |
-| Exercise minutes    | 1 to 600                                                                                                                                                        |
-| Weigh-in            | Valid date, not in the future, 35 to 300 kg                                                                                                                     |
+| Field                             | Rule                                                                                                                                                            |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Age                               | Whole number, 18 to 80                                                                                                                                          |
+| Height                            | 120 to 230 cm. In ft + in mode, feet at least 1 and inches 0 to 11.9                                                                                            |
+| Current weight                    | 35 to 300 kg (77 to 661 lb)                                                                                                                                     |
+| Goal weight                       | At least 1. Lose: lower than current weight and not below a BMI of 18.5. Gain: higher than current weight and not above a BMI of 30. Not asked when maintaining |
+| Duration                          | Whole number, 1 to 24 months                                                                                                                                    |
+| Start date                        | A valid date                                                                                                                                                    |
+| Food name                         | 1 to 60 characters                                                                                                                                              |
+| Food calories                     | 1 to 5,000 per entry                                                                                                                                            |
+| Protein, carbs, fat               | Blank, or 1 to 500 g                                                                                                                                            |
+| Exercise minutes                  | 1 to 600                                                                                                                                                        |
+| Speed (walking, running, cycling) | Within the range for the activity, in km/h or mph                                                                                                               |
+| Grade (walking, running)          | Blank for flat, or 1 to 15%                                                                                                                                     |
+| Weigh-in                          | Valid date, not in the future, 35 to 300 kg                                                                                                                     |
 
 Number fields only accept digits and one decimal point. Letters, minus signs, exponents (`1e3`), and hex values (`0x10`) are blocked while typing and rejected on submit.
 
@@ -136,6 +178,7 @@ Plain HTML, CSS, and vanilla JavaScript. No frameworks or build tools.
 - Calorie and weight-loss figures are **estimates**. The 7,700 kcal per kg rule and the activity multipliers are averages, so use your weekly weigh-ins to adjust.
 - The 7,700 kcal per kg figure treats all weight change as fat. Real gains include muscle and water, so expect variation.
 - The tool is for adults aged 18 to 80.
+- Walking, running, and cycling speed estimates assume flat or entered grade, and cycling assumes no wind. The 2024 Compendium values are for adults aged 19 to 59.
 - There is no data export, cloud sync, or multi-user support yet.
 
 ## Disclaimer
