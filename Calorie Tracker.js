@@ -393,6 +393,7 @@
   /* ---------- tabs ---------- */
   var tabs = document.querySelectorAll("nav button");
   function show(t) {
+    if (t !== "prog") editW = null;
     tabs.forEach(function (b) {
       b.setAttribute("aria-selected", b.dataset.t === t);
     });
@@ -1526,6 +1527,7 @@
   }
 
   /* ---------- progress ---------- */
+  var editW = null; /* date of the weigh-in being edited */
   function renderProg() {
     var host = $("prog");
     if (needPlan(host)) return;
@@ -1579,28 +1581,68 @@
         }),
       );
     }
+    var ed = null;
+    ws.forEach(function (w) {
+      if (w.d === editW && w.d !== p.start) ed = w;
+    });
+    if (!ed) editW = null;
     var wf = el("form", { novalidate: "novalidate" });
     var g = el("div", { cls: "grid" });
     g.appendChild(
       el(
         "label",
         { text: "Date" },
-        el("input", { id: "wd", type: "date", value: todayStr() }),
+        el("input", { id: "wd", type: "date", value: ed ? ed.d : todayStr() }),
       ),
     );
     g.appendChild(
       el(
         "label",
         { text: "Weight (" + p.wu + ")" },
-        el("input", { id: "ww", step: "any" }),
+        el("input", {
+          id: "ww",
+          step: "any",
+          value: ed
+            ? String(+(p.wu === "lb" ? ed.kg / LB : ed.kg).toFixed(1))
+            : "",
+        }),
       ),
     );
+    if (ed)
+      wf.appendChild(
+        el("p", {
+          cls: "mut",
+          text:
+            "Editing the weigh-in from " +
+            fd(ed.d) +
+            ". Change the date or weight, then save.",
+        }),
+      );
     wf.appendChild(g);
     var we = el("div", { cls: "err", hidden: "hidden" });
     wf.appendChild(we);
     wf.appendChild(
-      el("button", { cls: "btn", type: "submit", text: "Save weigh-in" }),
+      el("button", {
+        cls: "btn",
+        type: "submit",
+        text: ed ? "Save changes" : "Save weigh-in",
+      }),
     );
+    if (ed)
+      wf.appendChild(
+        el("button", {
+          cls: "btn alt",
+          type: "button",
+          text: "Cancel edit",
+          on: [
+            "click",
+            function () {
+              editW = null;
+              renderProg();
+            },
+          ],
+        }),
+      );
     wf.addEventListener("submit", function (e) {
       e.preventDefault();
       var d = $("wd").value,
@@ -1609,6 +1651,10 @@
       if (!validDate(d)) errs.push("Enter a valid date.");
       else if (d > todayStr())
         errs.push("Weigh-in date cannot be in the future.");
+      else if (d === p.start)
+        errs.push(
+          "The weigh-in for your plan start date comes from your plan. Change it on the Plan tab.",
+        );
       if (!isFinite(v) || v < 35 || v > 300)
         errs.push("Weight must be between 35 and 300 kg (77 to 661 lb).");
       if (errs.length) {
@@ -1616,9 +1662,10 @@
         return;
       }
       S.weights = S.weights.filter(function (w) {
-        return w.d !== d;
+        return w.d !== d && w.d !== editW;
       });
       S.weights.push({ d: d, kg: v });
+      editW = null;
       save();
       renderProg();
     });
@@ -1626,17 +1673,78 @@
     var t = el(
       "table",
       {},
-      el("tr", {}, el("th", { text: "Date" }), el("th", { text: "Weight" })),
+      el(
+        "tr",
+        {},
+        el("th", { text: "Date" }),
+        el("th", { text: "Weight" }),
+        el("th", { text: "" }),
+      ),
     );
     ws.slice()
       .reverse()
       .forEach(function (w) {
+        var act;
+        if (w.d === p.start)
+          act = el("span", { cls: "mut", text: "Plan start" });
+        else
+          act = el(
+            "span",
+            { style: "display:inline-flex;gap:6px" },
+            el("button", {
+              cls: "btn del",
+              type: "button",
+              "aria-label": "Edit weigh-in",
+              style: "color:var(--acc)",
+              text: "Edit",
+              on: [
+                "click",
+                function () {
+                  editW = w.d;
+                  renderProg();
+                  var f = $("ww");
+                  if (f) {
+                    f.focus();
+                    f.scrollIntoView({ block: "center" });
+                  }
+                },
+              ],
+            }),
+            el("button", {
+              cls: "btn del",
+              type: "button",
+              "aria-label": "Delete weigh-in",
+              text: "Delete",
+              on: [
+                "click",
+                function (e) {
+                  var b = e.target;
+                  if (b.dataset.s) {
+                    if (S.weights.length <= 1) {
+                      showErr(we, ["Keep at least one weigh-in."]);
+                      return;
+                    }
+                    S.weights = S.weights.filter(function (o) {
+                      return o.d !== w.d;
+                    });
+                    if (editW === w.d) editW = null;
+                    save();
+                    renderProg();
+                  } else {
+                    b.dataset.s = "1";
+                    b.textContent = "Confirm";
+                  }
+                },
+              ],
+            }),
+          );
         t.appendChild(
           el(
             "tr",
             {},
             el("td", { text: fd(w.d) }),
             el("td", { text: wtxt(w.kg) }),
+            el("td", {}, act),
           ),
         );
       });

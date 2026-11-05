@@ -36,7 +36,7 @@ cd <your-repo>
 
 1. **Plan tab**: pick your goal, fill in your details, and click **Calculate and save plan**. The app shows your BMR, maintenance calories, daily deficit or surplus, calorie target, expected weekly loss, BMI, and macro targets.
 2. **Daily log tab**: pick a date, then add what you ate and any exercise. The large number shows calories left in today's budget.
-3. **Progress tab**: save weigh-ins, see your weight chart and how far you are from your goal, read the weekly check, and review the last 14 days.
+3. **Progress tab**: save weigh-ins (use **Edit** or **Delete** on a row to fix a mistake; the plan start weigh-in is changed on the Plan tab), see your weight chart and how far you are from your goal, read the weekly check, and review the last 14 days.
 
 ### Eat back exercise calories
 
