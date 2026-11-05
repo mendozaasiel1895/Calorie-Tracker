@@ -11,6 +11,10 @@
       if (o && typeof o === "object") S = Object.assign(S, o);
     }
   } catch (e) {}
+  S.fast = Object.assign(
+    { ok: false, at: 0, kind: "16:8", hours: 16, active: null, log: [] },
+    S.fast || {},
+  );
   function save() {
     try {
       localStorage.setItem(KEY, JSON.stringify(S));
@@ -61,6 +65,7 @@
     xm: 1,
     xv: 1,
     xr: 1,
+    fh: 1,
     ww: 1,
   };
   var INT_IDS = { age: 1, mo: 1 };
@@ -413,14 +418,19 @@
   var tabs = document.querySelectorAll("nav button");
   function show(t) {
     if (t !== "prog") editW = null;
+    if (t !== "fast") {
+      editF = null;
+      stopTick();
+    }
     tabs.forEach(function (b) {
       b.setAttribute("aria-selected", b.dataset.t === t);
     });
-    ["plan", "today", "prog"].forEach(function (s) {
+    ["plan", "today", "prog", "fast"].forEach(function (s) {
       $(s).hidden = s !== t;
     });
     if (t === "today") renderToday();
     if (t === "prog") renderProg();
+    if (t === "fast") renderFast();
     if (t === "plan") renderPlan();
   }
   tabs.forEach(function (b) {
@@ -1213,6 +1223,640 @@
     });
     c.appendChild(el("div", { cls: "scroll" }, t));
     return c;
+  }
+
+  /* ---------- fasting ---------- */
+  /* Daily time-restricted eating: fasts of 12 to 24 hours (reviews define
+     intermittent fasting as fasting for 12 hours or more). Logged fasts are
+     1 to 72 hours. Durations come from exact timestamps, so overnight fasts
+     and daylight saving changes are counted correctly. */
+  var FPRE = [
+      ["16:8", 16],
+      ["12:12", 12],
+      ["14:10", 14],
+      ["18:6", 18],
+      ["20:4", 20],
+    ],
+    FMIN = 12,
+    FMAX = 24,
+    LOGMIN = 1,
+    LOGMAX = 72;
+  var SCREEN = [
+    "I have diabetes or take medication that lowers blood sugar (such as insulin)",
+    "I am pregnant, breastfeeding, or trying to conceive",
+    "I have, or have had, an eating disorder",
+    "I have kidney, liver, heart, or blood pressure disease, or take regular medication that must be taken with food",
+    "I am recovering from surgery or a serious illness",
+    "A doctor has told me not to fast, or I am not sure fasting is safe for me",
+  ];
+  var fastTick = null,
+    editF = null; /* id of the logged fast being edited */
+  function stopTick() {
+    if (fastTick) {
+      clearInterval(fastTick);
+      fastTick = null;
+    }
+  }
+  function hm(h) {
+    var m = Math.round(h * 60);
+    return Math.floor(m / 60) + " h " + pad(m % 60) + " m";
+  }
+  function toInput(ms) {
+    var d = new Date(ms);
+    return (
+      d.getFullYear() +
+      "-" +
+      pad(d.getMonth() + 1) +
+      "-" +
+      pad(d.getDate()) +
+      "T" +
+      pad(d.getHours()) +
+      ":" +
+      pad(d.getMinutes())
+    );
+  }
+  function fromInput(s) {
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s || "")) return NaN;
+    var t = new Date(s).getTime();
+    return isNaN(t) || toInput(t) !== s ? NaN : t;
+  }
+  function fdt(ms) {
+    return new Date(ms).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+  function newId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+  function kindName(k, t) {
+    return k === "custom" ? "custom " + t + " h" : k;
+  }
+  /* Fasting is open only after a clean safety check and while BMI is 18.5+. */
+  function fastGate() {
+    var m = S.plan.cm / 100,
+      bmi = weightOn(todayStr()) / (m * m);
+    return { bmi: bmi, under: bmi < 18.5, open: S.fast.ok && bmi >= 18.5 };
+  }
+  function checkSpan(s, e, skipId) {
+    var errs = [],
+      now = Date.now(),
+      F = S.fast;
+    if (isNaN(s) || isNaN(e))
+      return ["Enter a valid start and end date and time."];
+    if (e <= s) errs.push("The end must be after the start.");
+    else {
+      var h = (e - s) / 36e5;
+      if (h < LOGMIN) errs.push("A fast must be at least 1 hour long.");
+      if (h > LOGMAX) errs.push("A fast can be at most 72 hours long.");
+    }
+    if (e > now + 6e4) errs.push("The end cannot be in the future.");
+    F.log.forEach(function (o) {
+      if (o.id !== skipId && s < o.e && e > o.s)
+        errs.push(
+          "This fast overlaps one you already logged (" +
+            fdt(o.s) +
+            " to " +
+            fdt(o.e) +
+            ").",
+        );
+    });
+    if (F.active && e > F.active.s && s < now)
+      errs.push("This fast overlaps the one that is running now.");
+    return errs;
+  }
+  function screenCard(gate) {
+    var card = el(
+      "form",
+      { cls: "card", novalidate: "novalidate" },
+      el("h2", { text: "Fasting safety check" }),
+    );
+    if (gate.under) {
+      card.appendChild(
+        el("div", {
+          cls: "note w",
+          text:
+            "Your current BMI is " +
+            gate.bmi.toFixed(1) +
+            ", which is below 18.5, so fasting stays locked. Fasting can be unsafe when underweight. Please talk to a doctor.",
+        }),
+      );
+      return card;
+    }
+    card.appendChild(
+      el("p", {
+        cls: "mut",
+        text: "Fasting stays locked until you answer. Tick every statement that applies to you. Your answers are not saved, only the result.",
+      }),
+    );
+    var boxes = SCREEN.map(function (t) {
+      var cb = el("input", {
+        type: "checkbox",
+        style: "width:auto;margin:0 8px 0 0",
+      });
+      card.appendChild(
+        el(
+          "label",
+          {
+            style:
+              "display:flex;align-items:flex-start;font-weight:400;margin-top:8px",
+          },
+          cb,
+          t,
+        ),
+      );
+      return cb;
+    });
+    var conf = el("input", {
+      type: "checkbox",
+      style: "width:auto;margin:0 8px 0 0",
+    });
+    card.appendChild(
+      el(
+        "label",
+        { style: "display:flex;align-items:flex-start;margin-top:12px" },
+        conf,
+        "I confirm my answers are accurate.",
+      ),
+    );
+    var box = el("div", { cls: "err", hidden: "hidden" });
+    card.appendChild(box);
+    card.appendChild(
+      el("button", { cls: "btn", type: "submit", text: "Check my answers" }),
+    );
+    card.appendChild(
+      el("p", {
+        cls: "mut",
+        text: "This app cannot tell whether fasting is safe for you. It is not medical advice.",
+      }),
+    );
+    card.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var any = boxes.some(function (b) {
+        return b.checked;
+      });
+      if (!conf.checked) {
+        showErr(box, ["Tick the confirmation box to continue."]);
+        return;
+      }
+      if (any) {
+        S.fast.ok = false;
+        S.fast.active = null;
+        save();
+        showErr(box, [
+          "Fasting stays locked. The conditions you ticked can make fasting unsafe. Please talk to a doctor before fasting. If your situation changes, check again here.",
+        ]);
+        return;
+      }
+      S.fast.ok = true;
+      S.fast.at = Date.now();
+      save();
+      renderFast();
+    });
+    return card;
+  }
+  function renderFast() {
+    var host = $("fast");
+    stopTick();
+    if (needPlan(host)) return;
+    clear(host);
+    var F = S.fast,
+      gate = fastGate();
+    if (!gate.open) {
+      host.appendChild(screenCard(gate));
+      return;
+    }
+
+    /* target */
+    var tc = el(
+      "form",
+      { cls: "card", novalidate: "novalidate" },
+      el("h2", { text: "Your fasting target" }),
+    );
+    var sel = el("select", { id: "fk" });
+    FPRE.forEach(function (x) {
+      sel.appendChild(
+        el("option", {
+          value: x[0],
+          text:
+            x[0] + " (" + x[1] + " h fasting, " + (24 - x[1]) + " h eating)",
+        }),
+      );
+    });
+    sel.appendChild(el("option", { value: "custom", text: "Custom length" }));
+    sel.value = F.kind;
+    var hI = el("input", { id: "fh", value: String(F.hours) }),
+      lH = el("label", { text: "Fasting hours (12 to 24)" }, hI);
+    function syncT() {
+      lH.hidden = sel.value !== "custom";
+    }
+    sel.addEventListener("change", syncT);
+    syncT();
+    var tg = el(
+      "div",
+      { cls: "grid" },
+      el("label", { text: "Fasting type" }, sel),
+      lH,
+    );
+    tc.appendChild(tg);
+    var te = el("div", { cls: "err", hidden: "hidden" });
+    tc.appendChild(te);
+    tc.appendChild(
+      el("p", {
+        cls: "mut",
+        text:
+          "Current target: " +
+          kindName(F.kind, F.hours) +
+          ", a " +
+          F.hours +
+          " hour fast with a " +
+          (24 - F.hours) +
+          " hour eating window. Fasts of 12 to 24 hours are supported.",
+      }),
+    );
+    tc.appendChild(
+      el("button", { cls: "btn", type: "submit", text: "Save target" }),
+    );
+    tc.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var kind = sel.value,
+        hours;
+      if (kind === "custom") {
+        hours = num(hI.value);
+        if (!isFinite(hours) || hours < FMIN || hours > FMAX) {
+          showErr(te, ["Fasting hours must be a number from 12 to 24."]);
+          return;
+        }
+      } else {
+        FPRE.forEach(function (x) {
+          if (x[0] === kind) hours = x[1];
+        });
+      }
+      F.kind = kind;
+      F.hours = hours;
+      save();
+      renderFast();
+    });
+    host.appendChild(tc);
+
+    /* running fast or start form */
+    if (F.active) {
+      var a = F.active,
+        cc = el("div", { cls: "card" }, el("h2", { text: "Fast in progress" }));
+      var big = el("span", { cls: "big num", text: "" }),
+        st = el("span", { text: "" });
+      cc.appendChild(el("div", { cls: "hero" }, big, st));
+      var barI = el("i", { style: "width:0%" });
+      cc.appendChild(el("div", { cls: "bar" }, barI));
+      cc.appendChild(
+        el("div", {
+          cls: "mut",
+          text:
+            "Started " +
+            fdt(a.s) +
+            ". Target " +
+            a.t +
+            " h (" +
+            kindName(a.k, a.t) +
+            "). Eating window opens " +
+            fdt(a.s + a.t * 36e5) +
+            ".",
+        }),
+      );
+      var warn = el("div", {
+        cls: "note w",
+        text: "You have fasted for over 24 hours. Fasts this long are outside what this app supports. Please end your fast and eat.",
+        hidden: "hidden",
+      });
+      cc.appendChild(warn);
+      var ce = el("div", { cls: "err", hidden: "hidden" });
+      cc.appendChild(ce);
+      var paint = function () {
+        var h = (Date.now() - a.s) / 36e5;
+        big.textContent = hm(h);
+        st.textContent =
+          h >= a.t
+            ? "Target reached. You can end your fast."
+            : hm(a.t - h) + " to go";
+        barI.setAttribute(
+          "style",
+          "width:" + Math.min(100, (h / a.t) * 100) + "%",
+        );
+        warn.hidden = h <= 24;
+      };
+      paint();
+      fastTick = setInterval(paint, 1000);
+      cc.appendChild(
+        el("button", {
+          cls: "btn",
+          type: "button",
+          text: "End fast",
+          on: [
+            "click",
+            function () {
+              var now = Date.now(),
+                h = (now - a.s) / 36e5;
+              if (h < LOGMIN) {
+                showErr(ce, [
+                  "A fast shorter than 1 hour cannot be logged. Keep going, or discard it.",
+                ]);
+                return;
+              }
+              if (h > LOGMAX) {
+                showErr(ce, [
+                  "This fast is longer than 72 hours, which the app cannot log. Discard it, then use Log a past fast with the correct times.",
+                ]);
+                return;
+              }
+              F.log.push({ id: newId(), s: a.s, e: now, t: a.t, k: a.k });
+              F.active = null;
+              save();
+              renderFast();
+            },
+          ],
+        }),
+      );
+      cc.appendChild(
+        el("button", {
+          cls: "btn alt",
+          type: "button",
+          text: "Discard fast",
+          on: [
+            "click",
+            function (e) {
+              var b = e.target;
+              if (b.dataset.s) {
+                F.active = null;
+                save();
+                renderFast();
+              } else {
+                b.dataset.s = "1";
+                b.textContent = "Click again to discard";
+              }
+            },
+          ],
+        }),
+      );
+      host.appendChild(cc);
+    } else {
+      var sc = el(
+        "form",
+        { cls: "card", novalidate: "novalidate" },
+        el("h2", { text: "Start a fast" }),
+      );
+      var fsI = el("input", {
+        id: "fs",
+        type: "datetime-local",
+        value: toInput(Date.now()),
+      });
+      sc.appendChild(
+        el("div", { cls: "grid" }, el("label", { text: "Started at" }, fsI)),
+      );
+      var se = el("div", { cls: "err", hidden: "hidden" });
+      sc.appendChild(se);
+      sc.appendChild(
+        el("p", {
+          cls: "mut",
+          text: "Drink water during your fast. Stop and eat if you feel dizzy, faint, or unwell.",
+        }),
+      );
+      sc.appendChild(
+        el("button", { cls: "btn", type: "submit", text: "Start fast" }),
+      );
+      sc.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var s = fromInput(fsI.value),
+          now = Date.now(),
+          errs = [];
+        if (isNaN(s)) errs.push("Enter a valid start date and time.");
+        else {
+          if (s > now + 6e4) errs.push("The start cannot be in the future.");
+          if (now - s > LOGMAX * 36e5)
+            errs.push("The start must be within the last 72 hours.");
+          if (
+            F.log.some(function (o) {
+              return s < o.e && now > o.s;
+            })
+          )
+            errs.push("This start overlaps a fast you already logged.");
+        }
+        if (errs.length) {
+          showErr(se, errs);
+          return;
+        }
+        F.active = { s: s, t: F.hours, k: F.kind };
+        save();
+        renderFast();
+      });
+      host.appendChild(sc);
+    }
+
+    /* log a past fast (also used for editing) */
+    var ed = null;
+    F.log.forEach(function (o) {
+      if (o.id === editF) ed = o;
+    });
+    if (!ed) editF = null;
+    var lc = el(
+      "form",
+      { cls: "card", novalidate: "novalidate" },
+      el("h2", { text: ed ? "Edit fast" : "Log a past fast" }),
+    );
+    var lsI = el("input", {
+        id: "ls",
+        type: "datetime-local",
+        value: ed ? toInput(ed.s) : "",
+      }),
+      leI = el("input", {
+        id: "le",
+        type: "datetime-local",
+        value: ed ? toInput(ed.e) : "",
+      });
+    lc.appendChild(
+      el(
+        "div",
+        { cls: "grid" },
+        el("label", { text: "Fast started" }, lsI),
+        el("label", { text: "Fast ended" }, leI),
+      ),
+    );
+    var le = el("div", { cls: "err", hidden: "hidden" });
+    lc.appendChild(le);
+    lc.appendChild(
+      el("button", {
+        cls: "btn",
+        type: "submit",
+        text: ed ? "Save changes" : "Save fast",
+      }),
+    );
+    if (ed)
+      lc.appendChild(
+        el("button", {
+          cls: "btn alt",
+          type: "button",
+          text: "Cancel edit",
+          on: [
+            "click",
+            function () {
+              editF = null;
+              renderFast();
+            },
+          ],
+        }),
+      );
+    lc.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var s = fromInput(lsI.value),
+        en = fromInput(leI.value),
+        errs = checkSpan(s, en, ed ? ed.id : null);
+      if (errs.length) {
+        showErr(le, errs);
+        return;
+      }
+      if (ed) {
+        ed.s = s;
+        ed.e = en;
+      } else F.log.push({ id: newId(), s: s, e: en, t: F.hours, k: F.kind });
+      editF = null;
+      save();
+      renderFast();
+    });
+    host.appendChild(lc);
+
+    /* history */
+    var hc = el("div", { cls: "card" }, el("h2", { text: "Last 14 fasts" })),
+      list = F.log
+        .slice()
+        .sort(function (x, y) {
+          return y.s - x.s;
+        })
+        .slice(0, 14);
+    if (!list.length)
+      hc.appendChild(el("p", { cls: "mut", text: "No fasts logged yet." }));
+    else {
+      var week = F.log.filter(function (o) {
+          return o.e >= Date.now() - 7 * 864e5;
+        }),
+        hit = week.filter(function (o) {
+          return (o.e - o.s) / 36e5 >= o.t - 1e-9;
+        }).length,
+        avg = week.length
+          ? week.reduce(function (n, o) {
+              return n + (o.e - o.s) / 36e5;
+            }, 0) / week.length
+          : 0;
+      if (week.length)
+        hc.appendChild(
+          el("p", {
+            text:
+              "Last 7 days: " +
+              week.length +
+              " fast" +
+              (week.length > 1 ? "s" : "") +
+              ", " +
+              hit +
+              " reached the target, average " +
+              hm(avg) +
+              ".",
+          }),
+        );
+      var t = el("table");
+      list.forEach(function (o) {
+        var h = (o.e - o.s) / 36e5,
+          res = h >= o.t - 1e-9 ? "reached target" : "short by " + hm(o.t - h);
+        t.appendChild(
+          el(
+            "tr",
+            {},
+            el(
+              "td",
+              {},
+              fdt(o.s) + " to " + fdt(o.e),
+              el("div", {
+                cls: "mut",
+                text: hm(h) + " fasted, " + kindName(o.k, o.t) + ", " + res,
+              }),
+            ),
+            el(
+              "td",
+              {},
+              el(
+                "span",
+                { style: "display:inline-flex;gap:6px" },
+                el("button", {
+                  cls: "btn del",
+                  type: "button",
+                  "aria-label": "Edit fast",
+                  style: "color:var(--acc)",
+                  text: "Edit",
+                  on: [
+                    "click",
+                    function () {
+                      editF = o.id;
+                      renderFast();
+                      var f = $("ls");
+                      if (f) {
+                        f.focus();
+                        f.scrollIntoView({ block: "center" });
+                      }
+                    },
+                  ],
+                }),
+                el("button", {
+                  cls: "btn del",
+                  type: "button",
+                  "aria-label": "Delete fast",
+                  text: "Delete",
+                  on: [
+                    "click",
+                    function (e) {
+                      var b = e.target;
+                      if (b.dataset.s) {
+                        F.log = F.log.filter(function (x) {
+                          return x.id !== o.id;
+                        });
+                        if (editF === o.id) editF = null;
+                        save();
+                        renderFast();
+                      } else {
+                        b.dataset.s = "1";
+                        b.textContent = "Confirm";
+                      }
+                    },
+                  ],
+                }),
+              ),
+            ),
+          ),
+        );
+      });
+      hc.appendChild(el("div", { cls: "scroll" }, t));
+    }
+    hc.appendChild(
+      el("p", {
+        cls: "mut",
+        text: "For general information, not medical advice. Stop fasting and eat if you feel dizzy, faint, or unwell.",
+      }),
+    );
+    hc.appendChild(
+      el("button", {
+        cls: "btn alt",
+        type: "button",
+        text: "Retake safety check",
+        on: [
+          "click",
+          function () {
+            S.fast.ok = false;
+            S.fast.active = null;
+            save();
+            renderFast();
+          },
+        ],
+      }),
+    );
+    host.appendChild(hc);
   }
 
   /* ---------- weight chart ---------- */

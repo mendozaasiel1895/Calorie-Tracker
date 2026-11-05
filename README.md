@@ -12,6 +12,7 @@ No server, no account, no build step. Your data stays in your browser's local st
 - **Daily log** with food entries (calories plus optional macros) and exercise entries
 - **Live budget** showing calories left or over, with a progress bar and "Day X of Y" counter
 - **Exercise calories** from the 2024 Compendium of Physical Activities: pick an activity and intensity, or enter speed (and grade) for walking, running, and cycling
+- **Fasting tracker** (daily time-restricted eating) with a safety check, your own target, a live timer, and a fast history
 - **Weight chart** with your weigh-ins, a 7-day average line, and your planned path
 - **Weekly check** that compares your weight trend with the plan and suggests a target adjustment you can apply or ignore
 - **Weight tracking** with progress toward your goal
@@ -51,6 +52,30 @@ This setting controls how much of your logged exercise is added to your daily bu
 Changing the goal sets this to 50% for losing and 100% for maintaining or gaining. You can change it afterwards.
 
 Because your maintenance calories do not include logged workouts, your budget goes up when you log exercise unless this is set to 0%. When gaining, the daily log shows "kcal to reach target" so you know how much more to eat.
+
+4. **Fasting tab**: answer the safety check to unlock it, choose your fasting type and hours, then start and end fasts or log past ones.
+
+## Fasting
+
+The Fasting tab tracks daily **time-restricted eating**: you fast for a set number of hours and eat in the remaining window. It does not change your calorie target. There is no single worldwide standard for fasting; the definitions here follow published reviews, which describe intermittent fasting as fasting for 12 hours or more and time-restricted eating as a daily eating window of roughly 8 to 12 hours.
+
+**Safety check.** Fasting stays locked until you answer six yes-or-no statements and confirm your answers are accurate. If any statement applies (diabetes or blood-sugar medication, pregnancy or breastfeeding, an eating disorder history, kidney, liver, heart or blood pressure disease or medication that must be taken with food, recovery from surgery or serious illness, or a doctor's advice not to fast or any doubt), the feature stays locked and you are told to talk to a doctor. Your individual answers are not saved, only whether you passed. Fasting also stays locked while your current BMI is below 18.5. Using **Retake safety check** locks fasting again and discards any fast in progress.
+
+**Your target.** Choose 16:8, 12:12, 14:10, 18:6, or 20:4, or a custom length of 12 to 24 hours.
+
+**Timer and log.** Start a fast now or at an earlier time, watch the elapsed time and progress, and end it to save it. You can also log a past fast, and edit or delete any logged fast. The history shows the last 14 fasts and whether each reached its target, with a 7-day summary.
+
+| Fasting field           | Rule                                                             |
+| ----------------------- | ---------------------------------------------------------------- |
+| Custom fasting hours    | 12 to 24 (digits and one decimal point only)                     |
+| Fast start and end      | Valid date and time, end after start, end not in the future      |
+| Fast length             | 1 to 72 hours                                                    |
+| Overlap                 | A fast cannot overlap another logged fast or the one running now |
+| Start of a running fast | Not in the future, and within the last 72 hours                  |
+
+Durations are calculated from exact timestamps, so overnight fasts and daylight saving changes are counted correctly. A running fast shows a warning after 24 hours.
+
+This is for general information, not medical advice. Stop fasting and eat if you feel dizzy, faint, or unwell.
 
 ## How the numbers are calculated
 
@@ -157,7 +182,7 @@ Number fields only accept digits and one decimal point. Letters, minus signs, ex
 
 ```
 .
-├── Calorie Tracker.html   # Page markup
+├── Calorie Tracker.html   # Page markup (needs the Fasting tab and section)
 ├── Calorie Tracker.css    # Styles
 ├── Calorie Tracker.js     # Logic, calculations, validation, storage
 └── README.md
@@ -179,6 +204,7 @@ Plain HTML, CSS, and vanilla JavaScript. No frameworks or build tools.
 - The 7,700 kcal per kg figure treats all weight change as fat. Real gains include muscle and water, so expect variation.
 - The tool is for adults aged 18 to 80.
 - Walking, running, and cycling speed estimates assume flat or entered grade, and cycling assumes no wind. The 2024 Compendium values are for adults aged 19 to 59.
+- Fasting supports daily fasts of 12 to 24 hours only. Alternate-day fasting, 5:2 low-calorie days, and longer fasts are not included.
 - There is no data export, cloud sync, or multi-user support yet.
 
 ## Disclaimer
