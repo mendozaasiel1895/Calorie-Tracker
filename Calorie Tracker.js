@@ -142,9 +142,28 @@
   var r0 = function (x) {
     return Math.round(x);
   };
+  /* Entered weights are shown exactly as stored (float noise below 6 decimals
+     removed), never rounded. */
+  function trim(x, d) {
+    return String(+x.toFixed(d));
+  }
   function wtxt(kg, p) {
     var u = (p || S.plan || { wu: "kg" }).wu;
-    return u === "lb" ? (kg / LB).toFixed(1) + " lb" : kg.toFixed(1) + " kg";
+    return u === "lb" ? trim(kg / LB, 6) + " lb" : trim(kg, 6) + " kg";
+  }
+  /* Rates and trends are estimates: two decimals. */
+  function wrate(kg) {
+    var u = (S.plan || { wu: "kg" }).wu;
+    return u === "lb" ? trim(kg / LB, 2) + " lb" : trim(kg, 2) + " kg";
+  }
+  /* Allowed limits never round past the limit: the lowest rounds up, the
+     highest rounds down. */
+  function wlim(kg, wu, lowest) {
+    var v = wu === "lb" ? kg / LB : kg;
+    v = lowest
+      ? Math.ceil(v * 100 - 1e-9) / 100
+      : Math.floor(v * 100 + 1e-9) / 100;
+    return trim(v, 2) + " " + wu;
   }
 
   var ACT = [
@@ -423,12 +442,12 @@
       b = num($("h2").value || 0);
     if (to === "cm") {
       var cm = (a * 12 + (isNaN(b) ? 0 : b)) * 2.54;
-      $("h1").value = isFinite(cm) ? cm.toFixed(1) : "";
+      $("h1").value = isFinite(cm) ? +cm.toFixed(4) : "";
     } else {
       var inch = a / 2.54;
       if (isFinite(inch)) {
         $("h1").value = Math.floor(inch / 12);
-        $("h2").value = (inch % 12).toFixed(1);
+        $("h2").value = +(inch % 12).toFixed(4);
       }
     }
     syncH();
@@ -437,7 +456,7 @@
     var to = $("wu").value;
     ["wt", "gw"].forEach(function (i) {
       var v = num($(i).value);
-      if (isFinite(v)) $(i).value = (to === "lb" ? v / LB : v * LB).toFixed(1);
+      if (isFinite(v)) $(i).value = +(to === "lb" ? v / LB : v * LB).toFixed(4);
     });
   });
   syncH();
@@ -450,8 +469,9 @@
       g = num($("gw").value);
     $("eat").value = t === "lose" ? "50" : "100";
     if (isFinite(wt)) {
-      if (t === "gain" && !(g > wt)) $("gw").value = (wt * 1.05).toFixed(1);
-      else if (t === "lose" && !(g < wt)) $("gw").value = (wt * 0.9).toFixed(1);
+      if (t === "gain" && !(g > wt)) $("gw").value = +(wt * 1.05).toFixed(2);
+      else if (t === "lose" && !(g < wt))
+        $("gw").value = +(wt * 0.9).toFixed(2);
     }
     syncGoal();
   });
@@ -463,14 +483,14 @@
     $("wu").value = p.wu;
     $("hu").value = p.hu;
     if (p.hu === "cm") {
-      $("h1").value = +p.cm.toFixed(1);
+      $("h1").value = +p.cm.toFixed(6);
     } else {
       var i = p.cm / 2.54;
       $("h1").value = Math.floor(i / 12);
-      $("h2").value = +(i % 12).toFixed(1);
+      $("h2").value = +(i % 12).toFixed(6);
     }
-    $("wt").value = +(p.wu === "lb" ? p.kg / LB : p.kg).toFixed(1);
-    $("gw").value = +(p.wu === "lb" ? p.goal / LB : p.goal).toFixed(1);
+    $("wt").value = +(p.wu === "lb" ? p.kg / LB : p.kg).toFixed(6);
+    $("gw").value = +(p.wu === "lb" ? p.goal / LB : p.goal).toFixed(6);
     $("mo").value = p.months;
     $("sd").value = p.start;
     $("act").value = p.act;
@@ -527,7 +547,7 @@
         else if (isFinite(cm) && gw < 18.5 * m2 - 1e-9)
           errs.push(
             "Goal weight is below a BMI of 18.5 for your height. The lowest allowed is " +
-              wtxt(18.5 * m2, { wu: wu }) +
+              wlim(18.5 * m2, wu, true) +
               ".",
           );
       } else {
@@ -538,7 +558,7 @@
         else if (isFinite(cm) && gw > 30 * m2 + 1e-9)
           errs.push(
             "Goal weight is above a BMI of 30 for your height. The highest allowed is " +
-              wtxt(30 * m2, { wu: wu }) +
+              wlim(30 * m2, wu, false) +
               ".",
           );
       }
@@ -639,8 +659,8 @@
             "This plan " +
             (lose ? "loses" : "gains") +
             " about " +
-            c.weekly.toFixed(2) +
-            " kg per week, which is more than " +
+            wrate(c.weekly) +
+            " per week, which is more than " +
             (lose ? "1%" : "0.5%") +
             " of body weight. " +
             (lose
@@ -686,7 +706,7 @@
         ),
         row(
           "Expected " + (lose ? "loss" : "gain") + " per week",
-          c.weekly.toFixed(2) + " kg",
+          wrate(c.weekly),
         ),
       );
     }
@@ -1415,7 +1435,7 @@
         (span + 1) +
         " days: " +
         (rate >= 0 ? "+" : "-") +
-        wtxt(Math.abs(rate)) +
+        wrate(Math.abs(rate)) +
         " per week.",
     );
     if (days.length < 7) {
@@ -1447,7 +1467,7 @@
     note(
       "Expected from your plan and workouts: " +
         (exp >= 0 ? "+" : "-") +
-        wtxt(Math.abs(exp)) +
+        wrate(Math.abs(exp)) +
         " per week. Average eaten " +
         r0(eaten) +
         " kcal against a budget of " +
@@ -1603,7 +1623,7 @@
           id: "ww",
           step: "any",
           value: ed
-            ? String(+(p.wu === "lb" ? ed.kg / LB : ed.kg).toFixed(1))
+            ? String(+(p.wu === "lb" ? ed.kg / LB : ed.kg).toFixed(6))
             : "",
         }),
       ),
