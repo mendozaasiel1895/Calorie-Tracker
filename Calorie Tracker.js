@@ -170,6 +170,20 @@
       : Math.floor(v * 100 + 1e-9) / 100;
     return trim(v, 2) + " " + wu;
   }
+  /* Nutrients of one food entry; 0 means the value was left blank. */
+  function nv(x) {
+    return x ? trim(x, 6) + " g" : "-";
+  }
+  function nutr(e) {
+    return (
+      "Protein " +
+      nv(e.p) +
+      " \u00b7 Carbs " +
+      nv(e.cb) +
+      " \u00b7 Fat " +
+      nv(e.ft)
+    );
+  }
 
   var ACT = [
     [1.2, "Sedentary: desk work, little walking"],
@@ -989,13 +1003,14 @@
           return e.m + ": " + e.n;
         },
         function (e) {
-          return r0(e.c) + " kcal";
+          return trim(e.c, 6) + " kcal";
         },
         function (i) {
           L.f.splice(i, 1);
           save();
           renderToday();
         },
+        nutr,
       ),
     );
 
@@ -1186,7 +1201,7 @@
     box.appendChild(u);
     box.hidden = false;
   }
-  function listCard(title, arr, lab, val, del) {
+  function listCard(title, arr, lab, val, del, sub) {
     var c = el("div", { cls: "card" }, el("h2", { text: title }));
     if (!arr.length) {
       c.appendChild(
@@ -1200,7 +1215,12 @@
         el(
           "tr",
           {},
-          el("td", { text: lab(e) }),
+          el(
+            "td",
+            {},
+            lab(e),
+            sub ? el("div", { cls: "mut", text: sub(e) }) : null,
+          ),
           el("td", { text: val(e) }),
           el(
             "td",
@@ -2192,6 +2212,74 @@
 
   /* ---------- progress ---------- */
   var editW = null; /* date of the weigh-in being edited */
+  /* One history row. Tapping the date opens that day's foods and nutrients. */
+  function dayRows(ht, d) {
+    var t2 = totals(d),
+      b = budget(d),
+      n = t2.c - b,
+      L = S.logs[d],
+      det = el("td", { colspan: "4", style: "text-align:left" }),
+      dr = el("tr", { hidden: "hidden" }, det);
+    if (!L.f.length)
+      det.appendChild(
+        el("p", { cls: "mut", text: "No food logged for this day." }),
+      );
+    else {
+      L.f.forEach(function (e) {
+        det.appendChild(
+          el(
+            "div",
+            { style: "padding:6px 0;border-bottom:1px solid var(--rule)" },
+            el("div", {
+              text: e.m + ": " + e.n + " (" + trim(e.c, 6) + " kcal)",
+            }),
+            el("div", { cls: "mut", text: nutr(e) }),
+          ),
+        );
+      });
+      det.appendChild(
+        el("div", {
+          style: "padding-top:8px;font-weight:600",
+          text:
+            "Total: " +
+            trim(t2.c, 6) +
+            " kcal \u00b7 Protein " +
+            trim(t2.p, 6) +
+            " g \u00b7 Carbs " +
+            trim(t2.cb, 6) +
+            " g \u00b7 Fat " +
+            trim(t2.ft, 6) +
+            " g",
+        }),
+      );
+    }
+    var btn = el("button", {
+      type: "button",
+      "aria-expanded": "false",
+      style:
+        "background:none;border:0;padding:4px 0;font:inherit;color:var(--acc);text-decoration:underline;cursor:pointer;text-align:left",
+      text: "\u25b8 " + fd(d),
+      on: [
+        "click",
+        function () {
+          dr.hidden = !dr.hidden;
+          btn.setAttribute("aria-expanded", String(!dr.hidden));
+          btn.textContent = (dr.hidden ? "\u25b8 " : "\u25be ") + fd(d);
+        },
+      ],
+    });
+    ht.appendChild(
+      el(
+        "tr",
+        {},
+        el("td", {}, btn),
+        el("td", { text: r0(t2.c) }),
+        el("td", { text: r0(b) }),
+        el("td", { text: (n > 0 ? "+" : "") + r0(n) + " kcal" }),
+      ),
+    );
+    ht.appendChild(dr);
+  }
   function renderProg() {
     var host = $("prog");
     if (needPlan(host)) return;
@@ -2435,19 +2523,7 @@
       var d = addDays(td, -i);
       if (!S.logs[d] || (!S.logs[d].f.length && !S.logs[d].x.length)) continue;
       any = true;
-      var t2 = totals(d),
-        b = budget(d),
-        n = t2.c - b;
-      ht.appendChild(
-        el(
-          "tr",
-          {},
-          el("td", { text: fd(d) }),
-          el("td", { text: r0(t2.c) }),
-          el("td", { text: r0(b) }),
-          el("td", { text: (n > 0 ? "+" : "") + r0(n) + " kcal" }),
-        ),
-      );
+      dayRows(ht, d);
     }
     if (!any)
       hc.appendChild(
@@ -2461,7 +2537,7 @@
       hc.appendChild(
         el("p", {
           cls: "mut",
-          text: "Net is eaten minus budget. Negative means you ate less than your budget.",
+          text: "Net is eaten minus budget. Negative means you ate less than your budget. Tap a date to see the foods and nutrients.",
         }),
       );
     }
