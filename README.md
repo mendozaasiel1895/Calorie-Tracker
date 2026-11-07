@@ -12,6 +12,7 @@ No server, no account, no build step. Your data stays in your browser's local st
 - **Daily log** with food entries (calories plus optional macros) and exercise entries
 - **Live budget** showing calories left or over, with a progress bar and "Day X of Y" counter
 - **Exercise calories** from the 2024 Compendium of Physical Activities: pick an activity and intensity, or enter speed (and grade) for walking, running, and cycling
+- **Starter foods, food types, and diet and allergy filters** for building meals from common foods
 - **My foods and meal plans** (Meals tab) so common foods and whole meals can be added to the daily log in one tap
 - **Fasting tracker** (daily time-restricted eating) with a safety check, your own target, a live timer, and a fast history
 - **Weight chart** with your weigh-ins, a 7-day average line, and your planned path
@@ -61,6 +62,10 @@ Because your maintenance calories do not include logged workouts, your budget go
 
 **My foods.** Save a food once with a serving description (for example "1 cup cooked") and its calories, protein, carbs, and fat for one serving. You can search, edit, and delete saved foods.
 
+**Food type and tags.** Each saved food has a type (protein, grain or starch, vegetable, fruit, dairy, fat or nut, or other) and a "Contains" list (meat, fish, shellfish, eggs, dairy, gluten, peanuts, tree nuts, soy). Tick "I have checked this food's ingredients" so filters can trust the tags. A food that was never checked is treated as unknown.
+
+**Starter foods.** The Meals tab includes 25 common foods (chicken, salmon, eggs, tofu, lentils, beans, chickpeas, yogurt, milk, rice, pasta, quinoa, oats, potatoes, fruit, vegetables, almonds, olive oil, avocado). Tick the ones you want and add them to My foods, where you can edit them. Values per serving are worked out from USDA FoodData Central (SR Legacy) values per 100 g. Calories and protein were cross-checked against several USDA-derived sources, and carbs and fat use the standard SR Legacy values and agree with the calories within about 12% using 4 kcal per gram of protein and carbs and 9 per gram of fat. The exceptions are high-fiber vegetables (broccoli and spinach), where the difference is larger because fiber counts as carbohydrate but gives little energy. Cooking, brands, and varieties change nutrition, so check your own labels.
+
 **Meal plans.** A plan is a named set of foods, each with a number of servings and a meal slot (Breakfast, Lunch, Dinner, or Snack). You can assign a plan to weekdays, duplicate it, edit it, and delete it. While you build a plan, the app shows its total calories and macros next to your daily target.
 
 **In the Daily log.** The **Add food** card has a source choice:
@@ -75,23 +80,24 @@ If a plan is assigned to the weekday of the date you are viewing, a **Plan for M
 
 **Generate a meal plan.** In the Meals tab, the generator builds meal plans from the foods you saved.
 
-- Choose 1 to 7 days, 3 meals or 3 meals and a snack, and your daily calories (it starts at your plan's target; the minimum is your calorie floor and the maximum is 6,000). Tick the foods it may use.
-- It picks foods for each meal by what they mostly provide (protein, carbs, fat, or a low-calorie side) and rotates foods across days. It then chooses servings in steps of 0.25 (up to 4, or 2 for oils and low-calorie sides) so the day lands close to your calorie and macro targets.
+- Choose 1 to 7 days, 3 meals or 3 meals and a snack, a diet (anything, vegetarian, pescatarian, or vegan), foods to leave out (for example dairy, gluten, or tree nuts), and your daily calories (it starts at your plan's target; the minimum is your calorie floor and the maximum is 6,000). Tick the foods it may use.
+- Diet and allergy filters use only the tags on your foods. Foods that were never checked are left out while a filter is on, and the preview says why each food was skipped. Filters do not replace reading labels.
+- It picks foods for each meal by their food type (or, if none is set, by what they mostly provide) and rotates foods across days. It then chooses servings in steps of 0.25 (up to 4, or 2 for oils and low-calorie sides) so the day lands close to your calorie and macro targets.
 - The preview shows each food with its servings and the nutrition for that amount, the per-serving facts you saved, the day's total, and how far the total is from your targets. It warns when it cannot match your targets closely, which usually means you need a protein source and a carb source in your foods.
 - Nothing is saved until you click **Save as meal plan** (or **Save all**). Saved plans appear in Meal plans and in the Daily log, where you can rename them and assign weekdays.
 - Foods with no macros entered, under 4 kcal or over 1,250 kcal per serving, or with more than 125 g of one macro per serving are skipped, and the preview says which.
 
 The generator uses only the nutrition values you entered and knows nothing about taste, cooking, allergies, or dietary needs, so check each plan before you follow it. It is not medical or dietitian advice.
 
-| Meals field                     | Rule                                                                          |
-| ------------------------------- | ----------------------------------------------------------------------------- |
-| Food name / serving             | 1 to 60 / 1 to 40 characters; the same name and serving cannot be saved twice |
-| Calories per serving            | 1 to 5,000                                                                    |
-| Protein, carbs, fat per serving | Blank, or 1 to 500 g                                                          |
-| Servings (plans and log)        | 0.25 to 20, decimals allowed                                                  |
-| Scaled log entry                | Calories must work out to 1 to 5,000, and each macro to 500 g or less         |
-| Plan name                       | 1 to 40 characters, unique                                                    |
-| Limits                          | Up to 200 foods, 50 plans, and 30 foods per plan                              |
+| Meals field                                | Rule                                                                          |
+| ------------------------------------------ | ----------------------------------------------------------------------------- |
+| Food name / serving                        | 1 to 60 / 1 to 40 characters; the same name and serving cannot be saved twice |
+| Calories per serving                       | 1 to 5,000                                                                    |
+| Protein, carbs, fat per serving (My foods) | Blank, or 0.1 to 500 g (the Daily log's typed entries stay at 1 to 500 g)     |
+| Servings (plans and log)                   | 0.25 to 20, decimals allowed                                                  |
+| Scaled log entry                           | Calories must work out to 1 to 5,000, and each macro to 500 g or less         |
+| Plan name                                  | 1 to 40 characters, unique                                                    |
+| Limits                                     | Up to 200 foods, 50 plans, and 30 foods per plan                              |
 
 ## Fasting
 
@@ -250,7 +256,7 @@ Planned approach:
 
 A simulation with real Tesseract OCR on 60 synthetic labels (four layouts, four photo qualities) suggests what to expect. On a flat, sharp, well-lit label, about 94 to 98% of labels gave usable values on the first try when a repair step fixed common digit misreads. Two-column layouts (per 100 g and per serving) were the weakest. At low resolution or with heavy blur and glare, reading mostly failed and the app would fall back to typing, with about 2% of those cases giving a large wrong value that was not flagged. The test used clean English labels on flat surfaces, so real packaging, with curves, glare, and other languages, will likely do worse. This is why the review step is required.
 
-Other ideas considered: a built-in starter list of common foods with values taken from a national food database, so the generator works before you save any foods; barcode lookup against an online food database (needs internet, and coverage varies), cloud AI vision (needs a server and API key, and photos leave the device), and data export and import (set aside for now).
+Other ideas considered: barcode lookup against an online food database (needs internet, and coverage varies), cloud AI vision (needs a server and API key, and photos leave the device), and data export and import (set aside for now).
 
 ## Limitations
 
