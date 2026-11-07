@@ -28,6 +28,7 @@
         </button>
         <button role="tab" data-t="prog" aria-selected="false">Progress</button>
         <button role="tab" data-t="fast" aria-selected="false">Fasting</button>
+        <button role="tab" data-t="meals" aria-selected="false">Meals</button>
       </nav>
 
       <section id="plan">
@@ -84,7 +85,11 @@
               >Duration (1 to 24 months)<input id="mo" step="1" value="6"
             /></label>
             <label>Start date<input id="sd" type="date" /></label>
-            <label>Daily activity<select id="act"></select></label>
+            <label
+              >Daily life activity, not counting logged workouts<select
+                id="act"
+              ></select
+            ></label>
             <label
               >Eat back exercise calories<select id="eat">
                 <option value="0">0% (strict)</option>
@@ -102,6 +107,7 @@
       <section id="today" hidden></section>
       <section id="prog" hidden></section>
       <section id="fast" hidden></section>
+      <section id="meals" hidden></section>
     </main>
   </body>
 </html>

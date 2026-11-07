@@ -1274,6 +1274,304 @@
     planDraft = null,
     foodQ = "",
     addMode = "manual";
+  /* Food types and tags. Diet and allergen filters use the tags the user (or
+     the starter list) assigned; a food that was never checked is treated as
+     unknown and is left out whenever a filter is on. */
+  var TYPES = [
+    ["protein", "Protein"],
+    ["grain", "Grain or starch"],
+    ["vegetable", "Vegetable"],
+    ["fruit", "Fruit"],
+    ["dairy", "Dairy"],
+    ["fat", "Fat, oil, or nut"],
+    ["other", "Other"],
+  ];
+  var TAGS = [
+    ["meat", "Meat"],
+    ["fish", "Fish"],
+    ["shellfish", "Shellfish"],
+    ["egg", "Eggs"],
+    ["dairy", "Dairy"],
+    ["gluten", "Gluten (wheat, barley, rye, oats)"],
+    ["peanut", "Peanuts"],
+    ["treenut", "Tree nuts"],
+    ["soy", "Soy"],
+  ];
+  var DIETS = [
+    ["any", "Anything"],
+    ["vegetarian", "Vegetarian (no meat, fish, or shellfish)"],
+    ["pescatarian", "Pescatarian (no meat)"],
+    ["vegan", "Vegan (no meat, fish, shellfish, eggs, or dairy)"],
+  ];
+  var DIETX = {
+    any: [],
+    vegetarian: ["meat", "fish", "shellfish"],
+    pescatarian: ["meat"],
+    vegan: ["meat", "fish", "shellfish", "egg", "dairy"],
+  };
+  function typeName(k) {
+    var n = "";
+    TYPES.forEach(function (t) {
+      if (t[0] === k) n = t[1];
+    });
+    return n;
+  }
+  function tagNames(tags) {
+    return TAGS.filter(function (t) {
+      return tags.indexOf(t[0]) > -1;
+    })
+      .map(function (t) {
+        return t[1].split(" (")[0].toLowerCase();
+      })
+      .join(", ");
+  }
+  /* Starter foods: values per 100 g from USDA FoodData Central (SR Legacy
+     records). Each row is [name, type, serving label, serving grams, kcal,
+     protein, carbs, fat per 100 g, tags]. Per-serving values are worked out
+     from the per-100 g values when a food is added. */
+  var STARTER = [
+    [
+      "Chicken breast, roasted, skinless",
+      "protein",
+      "100 g cooked",
+      100,
+      165,
+      31,
+      0,
+      3.6,
+      ["meat"],
+    ],
+    [
+      "Salmon, Atlantic farmed, cooked",
+      "protein",
+      "100 g cooked",
+      100,
+      206,
+      22.1,
+      0,
+      12.35,
+      ["fish"],
+    ],
+    [
+      "Egg, whole, raw",
+      "protein",
+      "1 large egg (50 g)",
+      50,
+      143,
+      12.56,
+      0.72,
+      9.51,
+      ["egg"],
+    ],
+    [
+      "Tofu, firm, raw",
+      "protein",
+      "100 g",
+      100,
+      144,
+      17.27,
+      2.78,
+      8.72,
+      ["soy"],
+    ],
+    [
+      "Lentils, cooked",
+      "protein",
+      "100 g cooked",
+      100,
+      116,
+      9.02,
+      20.13,
+      0.38,
+      [],
+    ],
+    [
+      "Black beans, cooked",
+      "protein",
+      "100 g cooked",
+      100,
+      132,
+      8.86,
+      23.71,
+      0.54,
+      [],
+    ],
+    [
+      "Chickpeas, cooked",
+      "protein",
+      "100 g cooked",
+      100,
+      164,
+      8.86,
+      27.42,
+      2.59,
+      [],
+    ],
+    [
+      "Greek yogurt, plain, nonfat",
+      "dairy",
+      "1 container (170 g)",
+      170,
+      59,
+      10.19,
+      3.6,
+      0.39,
+      ["dairy"],
+    ],
+    [
+      "Milk, whole",
+      "dairy",
+      "1 cup (244 g)",
+      244,
+      61,
+      3.15,
+      4.8,
+      3.25,
+      ["dairy"],
+    ],
+    [
+      "White rice, cooked",
+      "grain",
+      "1 cup cooked (158 g)",
+      158,
+      130,
+      2.69,
+      28.17,
+      0.28,
+      [],
+    ],
+    ["Brown rice, cooked", "grain", "100 g cooked", 100, 123, 2.7, 25.6, 1, []],
+    [
+      "Pasta, cooked, enriched",
+      "grain",
+      "1 cup cooked (140 g)",
+      140,
+      157,
+      5.8,
+      30.7,
+      0.9,
+      ["gluten"],
+    ],
+    [
+      "Quinoa, cooked",
+      "grain",
+      "1 cup cooked (185 g)",
+      185,
+      120,
+      4.4,
+      21.3,
+      1.9,
+      [],
+    ],
+    [
+      "Oats, rolled, dry",
+      "grain",
+      "40 g dry",
+      40,
+      389,
+      16.9,
+      66.3,
+      6.9,
+      ["gluten"],
+    ],
+    [
+      "Potato, boiled, no skin",
+      "grain",
+      "100 g",
+      100,
+      87,
+      1.87,
+      20.13,
+      0.1,
+      [],
+    ],
+    ["Sweet potato, baked", "grain", "100 g", 100, 90, 2.01, 20.71, 0.15, []],
+    ["Banana, raw", "fruit", "100 g", 100, 89, 1.09, 22.84, 0.33, []],
+    ["Apple, raw, with skin", "fruit", "100 g", 100, 52, 0.26, 13.81, 0.17, []],
+    ["Orange, raw", "fruit", "100 g", 100, 47, 0.94, 11.75, 0.12, []],
+    [
+      "Broccoli, cooked",
+      "vegetable",
+      "100 g cooked",
+      100,
+      35,
+      2.38,
+      7.18,
+      0.41,
+      [],
+    ],
+    ["Spinach, raw", "vegetable", "100 g", 100, 23, 2.86, 3.63, 0.39, []],
+    ["Carrot, raw", "vegetable", "100 g", 100, 41, 0.93, 9.58, 0.24, []],
+    [
+      "Almonds",
+      "fat",
+      "28 g (1 oz)",
+      28,
+      579,
+      21.15,
+      21.55,
+      49.93,
+      ["treenut"],
+    ],
+    ["Olive oil", "fat", "1 tbsp (13.5 g)", 13.5, 884, 0, 0, 100, []],
+    ["Avocado, raw", "fat", "100 g", 100, 160, 2, 8.53, 14.66, []],
+  ];
+  function starterFood(r) {
+    var k = r[3] / 100,
+      f2 = function (x) {
+        return +(x * k).toFixed(2);
+      };
+    return {
+      id: newId(),
+      n: r[0],
+      s: r[2],
+      c: f2(r[4]),
+      p: f2(r[5]),
+      cb: f2(r[6]),
+      ft: f2(r[7]),
+      type: r[1],
+      tags: r[8].slice(),
+      tagged: true,
+      src: "USDA",
+    };
+  }
+  /* Adds starter foods (by index) to My foods; skips ones already saved. */
+  function addStarter(idx) {
+    var added = 0,
+      dup = 0,
+      full = false;
+    idx.forEach(function (i) {
+      var f = starterFood(STARTER[i]);
+      if (
+        S.foods.some(function (x) {
+          return (
+            x.n.toLowerCase() === f.n.toLowerCase() &&
+            x.s.toLowerCase() === f.s.toLowerCase()
+          );
+        })
+      ) {
+        dup++;
+        return;
+      }
+      if (S.foods.length >= 200) {
+        full = true;
+        return;
+      }
+      S.foods.push(f);
+      added++;
+    });
+    save();
+    return (
+      "Added " +
+      added +
+      " food" +
+      (added === 1 ? "" : "s") +
+      (dup ? ", skipped " + dup + " already saved" : "") +
+      (full ? ". You reached the limit of 200 foods" : "") +
+      "."
+    );
+  }
+  var starterMsg = "";
   function dow(s) {
     var p = s.split("-");
     return new Date(+p[0], +p[1] - 1, +p[2]).getDay();
@@ -1380,8 +1678,8 @@
         return;
       }
       var v = num(raw);
-      if (!isFinite(v) || v < 1 || v > 500)
-        errs.push(m[1] + " must be a number from 1 to 500 g, or left blank.");
+      if (!isFinite(v) || v < 0.1 || v > 500)
+        errs.push(m[1] + " must be a number from 0.1 to 500 g, or left blank.");
       out[m[0]] = v;
     });
     return out;
@@ -1741,6 +2039,56 @@
         el("label", { text: "Fat g per serving (optional)" }, fI),
       ),
     );
+    var tS = el("select", { id: "mt" });
+    TYPES.forEach(function (t) {
+      tS.appendChild(el("option", { value: t[0], text: t[1] }));
+    });
+    tS.value = ed && ed.type ? ed.type : "other";
+    card.appendChild(
+      el(
+        "div",
+        { cls: "grid", style: "margin-top:10px" },
+        el("label", { text: "Food type" }, tS),
+      ),
+    );
+    card.appendChild(
+      el("div", {
+        style: "font-size:14px;font-weight:600;margin-top:10px",
+        text: "Contains (tick everything that applies)",
+      }),
+    );
+    var tagBoxes = TAGS.map(function (t) {
+      var cb = el("input", {
+        type: "checkbox",
+        style: "width:auto;margin:0 6px 0 0",
+      });
+      cb.checked = !!(ed && ed.tags && ed.tags.indexOf(t[0]) > -1);
+      card.appendChild(
+        el(
+          "label",
+          {
+            style:
+              "display:inline-flex;align-items:center;font-weight:400;margin:6px 14px 0 0",
+          },
+          cb,
+          t[1],
+        ),
+      );
+      return { k: t[0], cb: cb };
+    });
+    var chk = el("input", {
+      type: "checkbox",
+      style: "width:auto;margin:0 8px 0 0",
+    });
+    chk.checked = !!(ed && ed.tagged);
+    card.appendChild(
+      el(
+        "label",
+        { style: "display:flex;align-items:flex-start;margin-top:12px" },
+        chk,
+        "I have checked this food\u2019s ingredients, so diet and allergy filters can use these tags.",
+      ),
+    );
     var box = el("div", { cls: "err", hidden: "hidden" });
     card.appendChild(box);
     card.appendChild(
@@ -1800,6 +2148,15 @@
         showErr(box, errs);
         return;
       }
+      var tags = chk.checked
+        ? tagBoxes
+            .filter(function (b) {
+              return b.cb.checked;
+            })
+            .map(function (b) {
+              return b.k;
+            })
+        : [];
       if (ed) {
         ed.n = name;
         ed.s = serv;
@@ -1807,6 +2164,9 @@
         ed.p = mac.p;
         ed.cb = mac.cb;
         ed.ft = mac.ft;
+        ed.type = tS.value;
+        ed.tags = tags;
+        ed.tagged = chk.checked;
       } else
         S.foods.push({
           id: newId(),
@@ -1816,6 +2176,9 @@
           p: mac.p,
           cb: mac.cb,
           ft: mac.ft,
+          type: tS.value,
+          tags: tags,
+          tagged: chk.checked,
         });
       editFood = null;
       save();
@@ -1873,6 +2236,19 @@
               el("div", {
                 cls: "mut",
                 text: trim(f.c, 6) + " kcal \u00b7 " + nutr(f),
+              }),
+              el("div", {
+                cls: "mut",
+                text:
+                  (f.type && f.type !== "other"
+                    ? typeName(f.type) + " \u00b7 "
+                    : "") +
+                  (f.tagged
+                    ? f.tags.length
+                      ? "Contains: " + tagNames(f.tags)
+                      : "Contains none of the listed items"
+                    : "Not checked for diet or allergy filters") +
+                  (f.src ? " \u00b7 " + f.src + " data" : ""),
               }),
             ),
             el(
@@ -1936,6 +2312,103 @@
     });
     card.appendChild(holder);
     fill();
+    return card;
+  }
+  function starterCard() {
+    var card = el("div", { cls: "card" }, el("h2", { text: "Starter foods" }));
+    card.appendChild(
+      el("p", {
+        cls: "mut",
+        text: "Common foods with values per serving worked out from USDA FoodData Central per 100 g data. Tick the ones you want and add them to My foods, where you can edit them. Packaged and cooked foods vary, so check your own labels.",
+      }),
+    );
+    var rows = [];
+    var box = el("div", {
+      style:
+        "max-height:240px;overflow:auto;border:1px solid var(--rule);border-radius:6px;padding:4px 8px",
+    });
+    TYPES.forEach(function (t) {
+      var inType = STARTER.map(function (r, i) {
+        return { r: r, i: i };
+      }).filter(function (x) {
+        return x.r[1] === t[0];
+      });
+      if (!inType.length) return;
+      box.appendChild(
+        el("div", {
+          style: "font-size:13px;font-weight:600;margin-top:6px",
+          text: t[1],
+        }),
+      );
+      inType.forEach(function (x) {
+        var f = starterFood(x.r),
+          cb = el("input", {
+            type: "checkbox",
+            style: "width:auto;margin:0 8px 0 0",
+          });
+        rows.push({ i: x.i, cb: cb });
+        box.appendChild(
+          el(
+            "label",
+            {
+              style:
+                "display:flex;align-items:center;font-weight:400;padding:3px 0",
+            },
+            cb,
+            f.n +
+              " (" +
+              f.s +
+              ") \u00b7 " +
+              trim(f.c, 6) +
+              " kcal \u00b7 " +
+              nutr(f),
+          ),
+        );
+      });
+    });
+    card.appendChild(box);
+    if (starterMsg) card.appendChild(el("p", { cls: "mut", text: starterMsg }));
+    card.appendChild(
+      el("button", {
+        cls: "btn",
+        type: "button",
+        text: "Add selected",
+        on: [
+          "click",
+          function () {
+            var idx = rows
+              .filter(function (r) {
+                return r.cb.checked;
+              })
+              .map(function (r) {
+                return r.i;
+              });
+            starterMsg = idx.length
+              ? addStarter(idx)
+              : "Tick at least one food.";
+            renderMeals();
+          },
+        ],
+      }),
+    );
+    card.appendChild(
+      el("button", {
+        cls: "btn alt",
+        type: "button",
+        text: "Add all " + STARTER.length,
+        on: [
+          "click",
+          function () {
+            starterMsg = addStarter(
+              STARTER.map(function (r, i) {
+                return i;
+              }),
+            );
+            renderMeals();
+          },
+        ],
+      }),
+    );
     return card;
   }
   function planBuilderCard() {
@@ -2361,7 +2834,15 @@
      until the user clicks Save. */
   var GMAX = 4,
     GSTEP = 0.25;
-  var genOpts = { days: 3, meals: 4, kcal: "", off: {}, seed: 1 },
+  var genOpts = {
+      days: 3,
+      meals: 4,
+      kcal: "",
+      off: {},
+      seed: 1,
+      diet: "any",
+      avoid: {},
+    },
     genRes = null;
   function macroTargets(T) {
     var P = Math.min(1.6 * S.plan.kg, (T * 0.35) / 4),
@@ -2369,6 +2850,15 @@
     return { c: T, p: P, ft: F, cb: Math.max(0, (T - P * 4 - F * 9) / 4) };
   }
   function foodRole(f) {
+    var m = {
+      protein: "protein",
+      grain: "carb",
+      vegetable: "light",
+      fruit: "fruit",
+      dairy: "dairy",
+      fat: "fat",
+    };
+    if (f.type && m[f.type]) return m[f.type];
     var k = f.c || 1;
     if ((4 * (f.p || 0)) / k >= 0.3) return "protein";
     if (k < 80) return "light"; /* vegetables and other low-calorie sides */
@@ -2384,6 +2874,20 @@
     if (Math.max(f.p || 0, f.cb || 0, f.ft || 0) > 125)
       return "over 125 g of one macro per serving";
     return "";
+  }
+  /* Diet and allergen filters. A food that was never checked is unknown, so
+     it is left out whenever any filter is on. */
+  function blocked(f) {
+    var ex = DIETX[genOpts.diet].slice();
+    TAGS.forEach(function (t) {
+      if (genOpts.avoid[t[0]] && ex.indexOf(t[0]) < 0) ex.push(t[0]);
+    });
+    if (!ex.length) return "";
+    if (!f.tagged) return "not checked for diet or allergy filters";
+    var hit = ex.filter(function (t) {
+      return f.tags.indexOf(t) > -1;
+    });
+    return hit.length ? "contains " + tagNames(hit) : "";
   }
   function mulberry(seed) {
     var a = seed >>> 0;
@@ -2409,10 +2913,13 @@
     ],
   };
   var GROLES = {
-    Breakfast: [["carb", "mixed"], ["protein"]],
-    Lunch: [["protein"], ["carb"], ["mixed", "fat", "light"]],
-    Dinner: [["protein"], ["carb"], ["mixed", "fat", "light"]],
-    Snack: [["mixed", "carb", "fat"]],
+    Breakfast: [
+      ["carb", "fruit", "mixed"],
+      ["protein", "dairy"],
+    ],
+    Lunch: [["protein"], ["carb"], ["light", "fat", "mixed", "fruit"]],
+    Dinner: [["protein"], ["carb"], ["light", "fat", "mixed"]],
+    Snack: [["fruit", "dairy", "fat", "mixed", "carb"]],
   };
   function pickFood(pool, roles, usage, rand, chosen) {
     var c = pool.filter(function (f) {
@@ -2576,7 +3083,7 @@
       card.appendChild(
         el("p", {
           cls: "mut",
-          text: "Save some foods in My foods first. The generator builds meals from the foods you saved, using the nutrition values you entered.",
+          text: "Save some foods in My foods first, or add the starter foods below. The generator builds meals from the foods you saved.",
         }),
       );
       return card;
@@ -2617,6 +3124,54 @@
         el("label", { text: "Meals per day" }, mS),
         el("label", { text: "Daily calories (" + c.floor + " to 6,000)" }, kI),
       ),
+    );
+    var dietS = el("select");
+    DIETS.forEach(function (d) {
+      dietS.appendChild(el("option", { value: d[0], text: d[1] }));
+    });
+    dietS.value = genOpts.diet;
+    dietS.addEventListener("change", function () {
+      genOpts.diet = dietS.value;
+    });
+    card.appendChild(
+      el(
+        "div",
+        { cls: "grid", style: "margin-top:10px" },
+        el("label", { text: "Diet" }, dietS),
+      ),
+    );
+    card.appendChild(
+      el("div", {
+        style: "font-size:14px;font-weight:600;margin-top:10px",
+        text: "Leave out foods that contain",
+      }),
+    );
+    TAGS.forEach(function (t) {
+      var cb = el("input", {
+        type: "checkbox",
+        style: "width:auto;margin:0 6px 0 0",
+      });
+      cb.checked = !!genOpts.avoid[t[0]];
+      cb.addEventListener("change", function () {
+        genOpts.avoid[t[0]] = cb.checked;
+      });
+      card.appendChild(
+        el(
+          "label",
+          {
+            style:
+              "display:inline-flex;align-items:center;font-weight:400;margin:6px 14px 0 0",
+          },
+          cb,
+          t[1],
+        ),
+      );
+    });
+    card.appendChild(
+      el("p", {
+        cls: "mut",
+        text: "Filters only use the tags on your foods, so check labels yourself. Foods that were never checked are left out while a filter is on.",
+      }),
     );
     card.appendChild(
       el("div", {
@@ -2672,7 +3227,7 @@
               );
             sortedFoods().forEach(function (f) {
               if (genOpts.off[f.id]) return;
-              var why = eligible(f);
+              var why = eligible(f) || blocked(f);
               if (why) skipped.push(f.n + " (" + why + ")");
               else pool.push(Object.assign({ role: foodRole(f) }, f));
             });
@@ -2872,6 +3427,7 @@
     if (!planDraft) planDraft = newDraft();
     host.appendChild(foodFormCard());
     host.appendChild(foodListCard());
+    host.appendChild(starterCard());
     host.appendChild(generatorCard());
     var gp = genPreviewCard();
     if (gp) host.appendChild(gp);

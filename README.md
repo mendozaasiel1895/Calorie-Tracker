@@ -196,7 +196,7 @@ On the Progress tab, the app fits a line through your weigh-ins from the last 21
 - **Average intake more than 150 kcal from your budget:** the gap is probably eating, so no change is suggested.
 - **Otherwise:** it suggests a change of up to 250 kcal per day, kept within the safe limits (calorie floor, 500 kcal surplus cap). Nothing changes unless you click **Apply suggested change**, and you can remove it later. After applying, the check restarts from that date. Saving your plan details again clears the adjustment.
 
-## Input validations
+## Input validation
 
 | Field                             | Rule                                                                                                                                                            |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
