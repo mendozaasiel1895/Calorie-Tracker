@@ -71,7 +71,7 @@
     ww: 1,
   };
   var INT_IDS = { age: 1, mo: 1 };
-  /* Fields created in the Meals tab and Daily log carry data-num="1". */
+  /* Fields created in the Meals section and Daily log carry data-num="1". */
   function isNumField(t) {
     return (
       NUM_IDS[t.id] === 1 ||
@@ -438,28 +438,47 @@
   }
 
   /* ---------- tabs ---------- */
-  var tabs = document.querySelectorAll("nav button");
+  var tabs = document.querySelectorAll("#tabs button"),
+    subtabs = document.querySelectorAll("#subtabs button"),
+    planSub = "targets"; /* section of the Plan tab: targets, meals, or fast */
   function show(t) {
     if (t !== "prog") editW = null;
-    if (t !== "fast") {
-      editF = null;
-      stopTick();
-    }
+    if (t !== "plan") editF = null;
+    if (t !== "plan" && t !== "today")
+      stopTick(); /* only the fasting timer ticks, and only on these tabs */
     tabs.forEach(function (b) {
       b.setAttribute("aria-selected", b.dataset.t === t);
     });
-    ["plan", "today", "prog", "fast", "meals"].forEach(function (s) {
+    ["plan", "today", "prog"].forEach(function (s) {
       $(s).hidden = s !== t;
     });
     if (t === "today") renderToday();
     if (t === "prog") renderProg();
-    if (t === "fast") renderFast();
-    if (t === "meals") renderMeals();
-    if (t === "plan") renderPlan();
+    if (t === "plan") showSub(planSub);
+  }
+  function showSub(s) {
+    planSub = s;
+    subtabs.forEach(function (b) {
+      b.setAttribute("aria-selected", b.dataset.s === s);
+    });
+    var ids = { targets: "ptargets", meals: "meals", fast: "fast" };
+    for (var k in ids) $(ids[k]).hidden = k !== s;
+    if (s !== "fast") {
+      editF = null;
+      stopTick();
+    }
+    if (s === "targets") renderPlan();
+    if (s === "meals") renderMeals();
+    if (s === "fast") renderFast();
   }
   tabs.forEach(function (b) {
     b.addEventListener("click", function () {
       show(b.dataset.t);
+    });
+  });
+  subtabs.forEach(function (b) {
+    b.addEventListener("click", function () {
+      showSub(b.dataset.s);
     });
   });
 
@@ -648,7 +667,7 @@
     if (!p) return;
     fillForm(p);
     var c = compute(p);
-    var card = el("div", { cls: "card" }, el("h2", { text: "Your plan" }));
+    var card = el("div", { cls: "card" }, el("h2", { text: "Your targets" }));
     var type = c.type,
       lose = type === "lose",
       verb = lose ? "lose" : "gain";
@@ -800,8 +819,11 @@
   }
   function renderToday() {
     var host = $("today");
+    stopTick();
     if (needPlan(host)) return;
     clear(host);
+    var fl = fastLine();
+    if (fl) host.appendChild(fl);
     var p = S.plan,
       c = compute(p),
       d = viewDate,
@@ -1704,7 +1726,7 @@
       pf.appendChild(
         el("p", {
           cls: "mut",
-          text: "No saved foods yet. Add foods in the Meals tab.",
+          text: "No saved foods yet. Add foods in Plan > Meals.",
         }),
       );
     else {
@@ -1775,7 +1797,7 @@
       pp.appendChild(
         el("p", {
           cls: "mut",
-          text: "No meal plans yet. Build one in the Meals tab.",
+          text: "No meal plans yet. Build one in Plan > Meals.",
         }),
       );
     else {
@@ -3074,7 +3096,7 @@
       card.appendChild(
         el("p", {
           cls: "mut",
-          text: "Save your plan first (Plan tab). The generator uses your calorie and macro targets.",
+          text: "Save your plan first (Plan > Targets). The generator uses your calorie and macro targets.",
         }),
       );
       return card;
@@ -3625,6 +3647,52 @@
       save();
       renderFast();
     });
+    return card;
+  }
+  /* Daily log: a running fast stays visible without opening the Plan tab. */
+  function fastLine() {
+    var a = S.fast && S.fast.active;
+    if (!a) return null;
+    var card = el(
+        "div",
+        { cls: "card" },
+        el("h2", { text: "Fast in progress" }),
+      ),
+      line = el("p", { text: "" }),
+      barI = el("i", { style: "width:0%" });
+    card.appendChild(line);
+    card.appendChild(el("div", { cls: "bar" }, barI));
+    var paint = function () {
+      var h = (Date.now() - a.s) / 36e5;
+      line.textContent =
+        hm(h) +
+        " of " +
+        a.t +
+        " h (" +
+        kindName(a.k, a.t) +
+        "). " +
+        (h >= a.t ? "Target reached." : hm(a.t - h) + " to go.");
+      barI.setAttribute(
+        "style",
+        "width:" + Math.min(100, (h / a.t) * 100) + "%",
+      );
+    };
+    paint();
+    fastTick = setInterval(paint, 1000);
+    card.appendChild(
+      el("button", {
+        cls: "btn alt",
+        type: "button",
+        text: "Open fasting",
+        on: [
+          "click",
+          function () {
+            planSub = "fast";
+            show("plan");
+          },
+        ],
+      }),
+    );
     return card;
   }
   function renderFast() {
@@ -4595,7 +4663,7 @@
         errs.push("Weigh-in date cannot be in the future.");
       else if (d === p.start)
         errs.push(
-          "The weigh-in for your plan start date comes from your plan. Change it on the Plan tab.",
+          "The weigh-in for your plan start date comes from your plan. Change it in Plan > Targets.",
         );
       if (!isFinite(v) || v < 35 || v > 300)
         errs.push("Weight must be between 35 and 300 kg (77 to 661 lb).");
