@@ -15,6 +15,8 @@
     { ok: false, at: 0, kind: "16:8", hours: 16, active: null, log: [] },
     S.fast || {},
   );
+  if (!Array.isArray(S.foods)) S.foods = [];
+  if (!Array.isArray(S.plans)) S.plans = [];
   function save() {
     try {
       localStorage.setItem(KEY, JSON.stringify(S));
@@ -69,16 +71,23 @@
     ww: 1,
   };
   var INT_IDS = { age: 1, mo: 1 };
+  /* Fields created in the Meals tab and Daily log carry data-num="1". */
+  function isNumField(t) {
+    return (
+      NUM_IDS[t.id] === 1 ||
+      (t.getAttribute && t.getAttribute("data-num") === "1")
+    );
+  }
   document.addEventListener("focusin", function (e) {
     var t = e.target;
-    if (NUM_IDS[t.id] === 1)
+    if (isNumField(t))
       t.setAttribute("inputmode", INT_IDS[t.id] ? "numeric" : "decimal");
   });
   document.addEventListener(
     "input",
     function (e) {
       var t = e.target;
-      if (NUM_IDS[t.id] !== 1) return;
+      if (!isNumField(t)) return;
       var v = t.value;
       if (INT_IDS[t.id]) v = v.replace(/[^0-9]/g, "");
       else {
@@ -439,12 +448,13 @@
     tabs.forEach(function (b) {
       b.setAttribute("aria-selected", b.dataset.t === t);
     });
-    ["plan", "today", "prog", "fast"].forEach(function (s) {
+    ["plan", "today", "prog", "fast", "meals"].forEach(function (s) {
       $(s).hidden = s !== t;
     });
     if (t === "today") renderToday();
     if (t === "prog") renderProg();
     if (t === "fast") renderFast();
+    if (t === "meals") renderMeals();
     if (t === "plan") renderPlan();
   }
   tabs.forEach(function (b) {
@@ -897,11 +907,9 @@
     host.appendChild(dc);
 
     /* food */
-    var fc = el(
-      "form",
-      { cls: "card", novalidate: "novalidate" },
-      el("h2", { text: "Add food" }),
-    );
+    var psc = planShortcut(L, d);
+    if (psc) host.appendChild(psc);
+    var fc = el("form", { novalidate: "novalidate" });
     var g = el("div", { cls: "grid" });
     g.appendChild(
       el(
@@ -994,7 +1002,7 @@
       save();
       renderToday();
     });
-    host.appendChild(fc);
+    host.appendChild(addFoodCard(fc, L));
     host.appendChild(
       listCard(
         "Food eaten",
@@ -1243,6 +1251,1632 @@
     });
     c.appendChild(el("div", { cls: "scroll" }, t));
     return c;
+  }
+
+  /* ---------- meals: My foods and meal plans ---------- */
+  /* Plans keep their own copies of each food's nutrients, so editing or
+     deleting a saved food never changes a plan, and adding a plan to the log
+     copies values into the day so later edits never change past days. */
+  var SLOTS = ["Breakfast", "Lunch", "Dinner", "Snack"],
+    DNAME = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ],
+    DORDER = [1, 2, 3, 4, 5, 6, 0],
+    QMIN = 0.25,
+    QMAX = 20;
+  var editFood = null,
+    planDraft = null,
+    foodQ = "",
+    addMode = "manual";
+  function dow(s) {
+    var p = s.split("-");
+    return new Date(+p[0], +p[1] - 1, +p[2]).getDay();
+  }
+  function dayText(days) {
+    return DORDER.filter(function (x) {
+      return days.indexOf(x) > -1;
+    })
+      .map(function (x) {
+        return DNAME[x].slice(0, 3);
+      })
+      .join(", ");
+  }
+  function qok(q) {
+    return isFinite(q) && q >= QMIN && q <= QMAX;
+  }
+  function sumQ(list) {
+    var t = { c: 0, p: 0, cb: 0, ft: 0 };
+    list.forEach(function (x) {
+      t.c += x.it.c * x.q;
+      t.p += (x.it.p || 0) * x.q;
+      t.cb += (x.it.cb || 0) * x.q;
+      t.ft += (x.it.ft || 0) * x.q;
+    });
+    return t;
+  }
+  function fmtTot(t) {
+    return (
+      trim(t.c, 4) +
+      " kcal \u00b7 Protein " +
+      trim(t.p, 4) +
+      " g \u00b7 Carbs " +
+      trim(t.cb, 4) +
+      " g \u00b7 Fat " +
+      trim(t.ft, 4) +
+      " g"
+    );
+  }
+  function mkEntry(it, q, meal) {
+    var nm =
+      q === 1
+        ? it.n + " (" + it.s + ")"
+        : it.n + " (" + trim(q, 6) + " x " + it.s + ")";
+    return {
+      n: nm.slice(0, 60),
+      m: meal,
+      c: +(it.c * q).toFixed(6),
+      p: +((it.p || 0) * q).toFixed(6),
+      cb: +((it.cb || 0) * q).toFixed(6),
+      ft: +((it.ft || 0) * q).toFixed(6),
+    };
+  }
+  /* A scaled entry must obey the same limits as a typed one. */
+  function entryErrs(e) {
+    var errs = [];
+    if (e.c < 1 || e.c > 5000)
+      errs.push(
+        e.n +
+          ": calories work out to " +
+          trim(e.c, 2) +
+          " kcal, but one entry must be 1 to 5,000 kcal.",
+      );
+    [
+      ["p", "Protein"],
+      ["cb", "Carbs"],
+      ["ft", "Fat"],
+    ].forEach(function (m) {
+      if (e[m[0]] > 500)
+        errs.push(e.n + ": " + m[1] + " works out to more than 500 g.");
+    });
+    return errs;
+  }
+  function sortedFoods() {
+    return S.foods.slice().sort(function (a, b) {
+      var x = a.n.toLowerCase(),
+        y = b.n.toLowerCase();
+      return x < y ? -1 : x > y ? 1 : 0;
+    });
+  }
+  function foodOpts(sel) {
+    sortedFoods().forEach(function (f) {
+      sel.appendChild(
+        el("option", { value: f.id, text: f.n + " (" + f.s + ")" }),
+      );
+    });
+  }
+  function slotSel() {
+    var s = el("select");
+    SLOTS.forEach(function (m) {
+      s.appendChild(el("option", { text: m }));
+    });
+    return s;
+  }
+  function readMacros(refs, errs) {
+    var out = {};
+    [
+      ["p", "Protein", refs.p],
+      ["cb", "Carbs", refs.cb],
+      ["ft", "Fat", refs.ft],
+    ].forEach(function (m) {
+      var raw = m[2].value.trim();
+      if (raw === "") {
+        out[m[0]] = 0;
+        return;
+      }
+      var v = num(raw);
+      if (!isFinite(v) || v < 1 || v > 500)
+        errs.push(m[1] + " must be a number from 1 to 500 g, or left blank.");
+      out[m[0]] = v;
+    });
+    return out;
+  }
+
+  /* Daily log: Add food with a source choice (type it in, My foods, meal plan). */
+  function addFoodCard(fc, L) {
+    var card = el("div", { cls: "card" }, el("h2", { text: "Add food" }));
+    var src = el("select");
+    [
+      ["manual", "Type it in"],
+      ["foods", "From My foods"],
+      ["plan", "From a meal plan"],
+    ].forEach(function (o) {
+      src.appendChild(el("option", { value: o[0], text: o[1] }));
+    });
+    src.value = addMode;
+    card.appendChild(el("label", { text: "Source" }, src));
+
+    var pf = el("div");
+    if (!S.foods.length)
+      pf.appendChild(
+        el("p", {
+          cls: "mut",
+          text: "No saved foods yet. Add foods in the Meals tab.",
+        }),
+      );
+    else {
+      var fsel = el("select"),
+        fq = el("input", { value: "1", "data-num": "1" }),
+        fmS = slotSel();
+      foodOpts(fsel);
+      pf.appendChild(
+        el(
+          "div",
+          { cls: "grid" },
+          el("label", { text: "Food" }, fsel),
+          el("label", { text: "Servings (0.25 to 20)" }, fq),
+          el("label", { text: "Meal" }, fmS),
+        ),
+      );
+      var fv = el("p", { cls: "mut", text: "" }),
+        fe2 = el("div", { cls: "err", hidden: "hidden" });
+      pf.appendChild(fe2);
+      pf.appendChild(fv);
+      var food = function () {
+        return S.foods.filter(function (f) {
+          return f.id === fsel.value;
+        })[0];
+      };
+      var updF = function () {
+        var f = food(),
+          q = num(fq.value);
+        fv.textContent =
+          f && qok(q)
+            ? "Adds " + fmtTot(sumQ([{ it: f, q: q }]))
+            : "Enter servings from 0.25 to 20.";
+      };
+      fsel.addEventListener("change", updF);
+      fq.addEventListener("input", updF);
+      updF();
+      pf.appendChild(
+        el("button", {
+          cls: "btn",
+          type: "button",
+          text: "Add food",
+          on: [
+            "click",
+            function () {
+              var f = food(),
+                q = num(fq.value);
+              if (!qok(q)) {
+                showErr(fe2, ["Servings must be a number from 0.25 to 20."]);
+                return;
+              }
+              var e = mkEntry(f, q, fmS.value),
+                errs = entryErrs(e);
+              if (errs.length) {
+                showErr(fe2, errs);
+                return;
+              }
+              L.f.push(e);
+              save();
+              renderToday();
+            },
+          ],
+        }),
+      );
+    }
+
+    var pp = el("div");
+    if (!S.plans.length)
+      pp.appendChild(
+        el("p", {
+          cls: "mut",
+          text: "No meal plans yet. Build one in the Meals tab.",
+        }),
+      );
+    else {
+      var psel = el("select"),
+        box = el("div"),
+        rows = [],
+        pv = el("p", { cls: "mut", text: "" }),
+        pe = el("div", { cls: "err", hidden: "hidden" });
+      S.plans.forEach(function (pl) {
+        psel.appendChild(
+          el("option", {
+            value: pl.id,
+            text:
+              pl.name + (pl.days.length ? " (" + dayText(pl.days) + ")" : ""),
+          }),
+        );
+      });
+      var cur = function () {
+        return S.plans.filter(function (x) {
+          return x.id === psel.value;
+        })[0];
+      };
+      var chosen = function () {
+        var out = [],
+          bad = false;
+        rows.forEach(function (r) {
+          if (!r.cb.checked) return;
+          var q = num(r.qI.value);
+          if (!qok(q)) bad = true;
+          else out.push({ it: r.it, q: q });
+        });
+        return { list: out, bad: bad };
+      };
+      var updP = function () {
+        var c = chosen();
+        pv.textContent = c.bad
+          ? "Servings must be from 0.25 to 20."
+          : c.list.length
+            ? "Adds " + fmtTot(sumQ(c.list))
+            : "Tick at least one food.";
+      };
+      var build = function () {
+        clear(box);
+        rows = [];
+        cur().items.forEach(function (it) {
+          var cb = el("input", {
+            type: "checkbox",
+            style: "width:auto;margin:0 8px 0 0",
+          });
+          cb.checked = true;
+          var qI = el("input", {
+            value: String(it.q),
+            "data-num": "1",
+            "aria-label": "Servings",
+            style: "width:84px;margin:0",
+          });
+          box.appendChild(
+            el(
+              "div",
+              {
+                style:
+                  "display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--rule)",
+              },
+              cb,
+              el(
+                "div",
+                { style: "flex:1" },
+                el("div", { text: it.m + ": " + it.n + " (" + it.s + ")" }),
+                el("div", {
+                  cls: "mut",
+                  text:
+                    "per serving: " +
+                    trim(it.c, 6) +
+                    " kcal \u00b7 " +
+                    nutr(it),
+                }),
+              ),
+              qI,
+            ),
+          );
+          rows.push({ it: it, cb: cb, qI: qI });
+        });
+        updP();
+      };
+      psel.addEventListener("change", build);
+      box.addEventListener("input", updP);
+      box.addEventListener("change", updP);
+      pp.appendChild(el("label", { text: "Meal plan" }, psel));
+      pp.appendChild(box);
+      pp.appendChild(pe);
+      pp.appendChild(pv);
+      build();
+      pp.appendChild(
+        el("button", {
+          cls: "btn",
+          type: "button",
+          text: "Add selected foods",
+          on: [
+            "click",
+            function () {
+              var c = chosen();
+              if (c.bad) {
+                showErr(pe, ["Servings must be a number from 0.25 to 20."]);
+                return;
+              }
+              if (!c.list.length) {
+                showErr(pe, ["Tick at least one food."]);
+                return;
+              }
+              var ents = c.list.map(function (x) {
+                  return mkEntry(x.it, x.q, x.it.m);
+                }),
+                errs = [];
+              ents.forEach(function (e) {
+                errs = errs.concat(entryErrs(e));
+              });
+              if (errs.length) {
+                showErr(pe, errs);
+                return;
+              }
+              ents.forEach(function (e) {
+                L.f.push(e);
+              });
+              save();
+              renderToday();
+            },
+          ],
+        }),
+      );
+    }
+    var sync = function () {
+      addMode = src.value;
+      fc.hidden = addMode !== "manual";
+      pf.hidden = addMode !== "foods";
+      pp.hidden = addMode !== "plan";
+    };
+    src.addEventListener("change", sync);
+    card.appendChild(fc);
+    card.appendChild(pf);
+    card.appendChild(pp);
+    sync();
+    return card;
+  }
+  /* Shortcut: plans assigned to the weekday of the date being viewed. */
+  function planShortcut(L, d) {
+    var dw = dow(d),
+      pls = S.plans.filter(function (p) {
+        return p.days.indexOf(dw) > -1;
+      });
+    if (!pls.length) return null;
+    var card = el(
+      "div",
+      { cls: "card" },
+      el("h2", { text: "Plan for " + DNAME[dw] }),
+    );
+    var er = el("div", { cls: "err", hidden: "hidden" });
+    pls.forEach(function (pl) {
+      card.appendChild(
+        el(
+          "div",
+          { style: "padding:6px 0" },
+          el("div", { style: "font-weight:600", text: pl.name }),
+          el("div", {
+            cls: "mut",
+            text:
+              pl.items.length +
+              " food" +
+              (pl.items.length > 1 ? "s" : "") +
+              ": " +
+              fmtTot(
+                sumQ(
+                  pl.items.map(function (it) {
+                    return { it: it, q: it.q };
+                  }),
+                ),
+              ),
+          }),
+        ),
+      );
+      card.appendChild(
+        el("button", {
+          cls: "btn",
+          type: "button",
+          text: "Add all of " + pl.name,
+          on: [
+            "click",
+            function () {
+              var ents = pl.items.map(function (it) {
+                  return mkEntry(it, it.q, it.m);
+                }),
+                errs = [];
+              ents.forEach(function (e) {
+                errs = errs.concat(entryErrs(e));
+              });
+              if (errs.length) {
+                showErr(er, errs);
+                return;
+              }
+              ents.forEach(function (e) {
+                L.f.push(e);
+              });
+              save();
+              renderToday();
+            },
+          ],
+        }),
+      );
+    });
+    card.appendChild(er);
+    return card;
+  }
+
+  function newDraft() {
+    return { id: null, name: "", days: [], items: [] };
+  }
+  function nz(x) {
+    return x ? String(x) : "";
+  }
+  function foodFormCard() {
+    var ed = null;
+    S.foods.forEach(function (f) {
+      if (f.id === editFood) ed = f;
+    });
+    if (!ed) editFood = null;
+    var card = el(
+      "form",
+      { cls: "card", novalidate: "novalidate" },
+      el("h2", { text: ed ? "Edit food" : "Save a food" }),
+    );
+    var nI = el("input", { id: "mn", maxlength: "60", value: ed ? ed.n : "" }),
+      sI = el("input", { id: "ms", maxlength: "40", value: ed ? ed.s : "" }),
+      cI = el("input", {
+        id: "mc",
+        "data-num": "1",
+        value: ed ? String(ed.c) : "",
+      }),
+      pI = el("input", {
+        id: "mp",
+        "data-num": "1",
+        value: ed ? nz(ed.p) : "",
+      }),
+      bI = el("input", {
+        id: "mb",
+        "data-num": "1",
+        value: ed ? nz(ed.cb) : "",
+      }),
+      fI = el("input", {
+        id: "mf",
+        "data-num": "1",
+        value: ed ? nz(ed.ft) : "",
+      });
+    card.appendChild(
+      el(
+        "div",
+        { cls: "grid" },
+        el("label", { text: "Food name" }, nI),
+        el("label", { text: "Serving (for example 1 cup cooked)" }, sI),
+        el("label", { text: "Calories per serving (kcal)" }, cI),
+        el("label", { text: "Protein g per serving (optional)" }, pI),
+        el("label", { text: "Carbs g per serving (optional)" }, bI),
+        el("label", { text: "Fat g per serving (optional)" }, fI),
+      ),
+    );
+    var box = el("div", { cls: "err", hidden: "hidden" });
+    card.appendChild(box);
+    card.appendChild(
+      el("p", {
+        cls: "mut",
+        text: "Enter the values for one serving. Changing a saved food does not change meal plans that already use it.",
+      }),
+    );
+    card.appendChild(
+      el("button", {
+        cls: "btn",
+        type: "submit",
+        text: ed ? "Save changes" : "Save food",
+      }),
+    );
+    if (ed)
+      card.appendChild(
+        el("button", {
+          cls: "btn alt",
+          type: "button",
+          text: "Cancel edit",
+          on: [
+            "click",
+            function () {
+              editFood = null;
+              renderMeals();
+            },
+          ],
+        }),
+      );
+    card.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var errs = [],
+        name = nI.value.trim(),
+        serv = sI.value.trim(),
+        cal = num(cI.value);
+      var mac = readMacros({ p: pI, cb: bI, ft: fI }, errs);
+      if (name.length < 1 || name.length > 60)
+        errs.push("Food name is required (up to 60 characters).");
+      if (serv.length < 1 || serv.length > 40)
+        errs.push("Serving is required (up to 40 characters).");
+      if (!isFinite(cal) || cal < 1 || cal > 5000)
+        errs.push("Calories must be between 1 and 5,000 kcal per serving.");
+      if (!ed && S.foods.length >= 200)
+        errs.push("You can save up to 200 foods.");
+      if (
+        S.foods.some(function (f) {
+          return (
+            (!ed || f.id !== ed.id) &&
+            f.n.toLowerCase() === name.toLowerCase() &&
+            f.s.toLowerCase() === serv.toLowerCase()
+          );
+        })
+      )
+        errs.push("That food with that serving is already saved.");
+      if (errs.length) {
+        showErr(box, errs);
+        return;
+      }
+      if (ed) {
+        ed.n = name;
+        ed.s = serv;
+        ed.c = cal;
+        ed.p = mac.p;
+        ed.cb = mac.cb;
+        ed.ft = mac.ft;
+      } else
+        S.foods.push({
+          id: newId(),
+          n: name,
+          s: serv,
+          c: cal,
+          p: mac.p,
+          cb: mac.cb,
+          ft: mac.ft,
+        });
+      editFood = null;
+      save();
+      renderMeals();
+    });
+    return card;
+  }
+  function foodListCard() {
+    var card = el(
+      "div",
+      { cls: "card" },
+      el("h2", { text: "My foods (" + S.foods.length + ")" }),
+    );
+    if (!S.foods.length) {
+      card.appendChild(
+        el("p", {
+          cls: "mut",
+          text: "No saved foods yet. Save the foods you eat often, such as rice or eggs, then add them to your log or to a meal plan with one tap.",
+        }),
+      );
+      return card;
+    }
+    var q = el("input", {
+        id: "mq",
+        "aria-label": "Search foods",
+        value: foodQ,
+        maxlength: "40",
+      }),
+      holder = el("div", { cls: "scroll" });
+    card.appendChild(el("label", { text: "Search" }, q));
+    function fill() {
+      clear(holder);
+      var list = sortedFoods().filter(function (f) {
+        return (
+          (f.n + " " + f.s).toLowerCase().indexOf(foodQ.trim().toLowerCase()) >
+          -1
+        );
+      });
+      if (!list.length) {
+        holder.appendChild(
+          el("p", { cls: "mut", text: "No foods match your search." }),
+        );
+        return;
+      }
+      var t = el("table");
+      list.forEach(function (f) {
+        t.appendChild(
+          el(
+            "tr",
+            {},
+            el(
+              "td",
+              {},
+              f.n + " (" + f.s + ")",
+              el("div", {
+                cls: "mut",
+                text: trim(f.c, 6) + " kcal \u00b7 " + nutr(f),
+              }),
+            ),
+            el(
+              "td",
+              {},
+              el(
+                "span",
+                { style: "display:inline-flex;gap:6px" },
+                el("button", {
+                  cls: "btn del",
+                  type: "button",
+                  "aria-label": "Edit food",
+                  style: "color:var(--acc)",
+                  text: "Edit",
+                  on: [
+                    "click",
+                    function () {
+                      editFood = f.id;
+                      renderMeals();
+                      var x = $("mn");
+                      if (x) {
+                        x.focus();
+                        x.scrollIntoView({ block: "center" });
+                      }
+                    },
+                  ],
+                }),
+                el("button", {
+                  cls: "btn del",
+                  type: "button",
+                  "aria-label": "Delete food",
+                  text: "Delete",
+                  on: [
+                    "click",
+                    function (e) {
+                      var b = e.target;
+                      if (b.dataset.s) {
+                        S.foods = S.foods.filter(function (x) {
+                          return x.id !== f.id;
+                        });
+                        if (editFood === f.id) editFood = null;
+                        save();
+                        renderMeals();
+                      } else {
+                        b.dataset.s = "1";
+                        b.textContent = "Confirm";
+                      }
+                    },
+                  ],
+                }),
+              ),
+            ),
+          ),
+        );
+      });
+      holder.appendChild(t);
+    }
+    q.addEventListener("input", function () {
+      foodQ = q.value;
+      fill();
+    });
+    card.appendChild(holder);
+    fill();
+    return card;
+  }
+  function planBuilderCard() {
+    var D = planDraft,
+      card = el(
+        "div",
+        { cls: "card" },
+        el("h2", { text: D.id ? "Edit meal plan" : "New meal plan" }),
+      );
+    var nI = el("input", { id: "pn", maxlength: "40", value: D.name });
+    nI.addEventListener("input", function () {
+      D.name = nI.value;
+    });
+    card.appendChild(
+      el("label", { text: "Plan name (for example Monday meal)" }, nI),
+    );
+    var dl = el(
+      "div",
+      { style: "margin-top:10px" },
+      el("div", {
+        style: "font-size:14px;font-weight:600",
+        text: "Use on these days (optional)",
+      }),
+    );
+    DORDER.forEach(function (x) {
+      var cb = el("input", {
+        type: "checkbox",
+        style: "width:auto;margin:0 6px 0 0",
+      });
+      cb.checked = D.days.indexOf(x) > -1;
+      cb.addEventListener("change", function () {
+        D.days = D.days.filter(function (y) {
+          return y !== x;
+        });
+        if (cb.checked) D.days.push(x);
+      });
+      dl.appendChild(
+        el(
+          "label",
+          {
+            style:
+              "display:inline-flex;align-items:center;font-weight:400;margin:6px 14px 0 0",
+          },
+          cb,
+          DNAME[x],
+        ),
+      );
+    });
+    card.appendChild(dl);
+    var ae = el("div", { cls: "err", hidden: "hidden" });
+    card.appendChild(
+      el("h2", { style: "margin-top:16px", text: "Foods in this plan" }),
+    );
+    if (!S.foods.length)
+      card.appendChild(
+        el("p", {
+          cls: "mut",
+          text: "Save some foods in My foods above first. Then you can add them here.",
+        }),
+      );
+    else {
+      var fsel = el("select"),
+        qI = el("input", { value: "1", "data-num": "1" }),
+        ms = slotSel();
+      foodOpts(fsel);
+      card.appendChild(
+        el(
+          "div",
+          { cls: "grid" },
+          el("label", { text: "Food" }, fsel),
+          el("label", { text: "Servings (0.25 to 20)" }, qI),
+          el("label", { text: "Meal" }, ms),
+        ),
+      );
+      card.appendChild(
+        el("button", {
+          cls: "btn",
+          type: "button",
+          text: "Add to plan",
+          on: [
+            "click",
+            function () {
+              var f = S.foods.filter(function (x) {
+                  return x.id === fsel.value;
+                })[0],
+                q = num(qI.value);
+              if (!qok(q)) {
+                showErr(ae, ["Servings must be a number from 0.25 to 20."]);
+                return;
+              }
+              if (D.items.length >= 30) {
+                showErr(ae, ["A plan can hold up to 30 foods."]);
+                return;
+              }
+              D.items.push({
+                n: f.n,
+                s: f.s,
+                c: f.c,
+                p: f.p,
+                cb: f.cb,
+                ft: f.ft,
+                q: q,
+                m: ms.value,
+              });
+              renderMeals();
+            },
+          ],
+        }),
+      );
+    }
+    card.appendChild(ae);
+    if (D.items.length) {
+      var t = el("table", { style: "margin-top:10px" });
+      D.items.forEach(function (it, i) {
+        var q = el("input", {
+          value: String(it.q),
+          "data-num": "1",
+          "aria-label": "Servings",
+          style: "width:84px;margin:0",
+        });
+        q.addEventListener("change", function () {
+          var v = num(q.value);
+          if (!qok(v)) {
+            showErr(ae, ["Servings must be a number from 0.25 to 20."]);
+            q.value = String(it.q);
+            return;
+          }
+          it.q = v;
+          renderMeals();
+        });
+        t.appendChild(
+          el(
+            "tr",
+            {},
+            el(
+              "td",
+              {},
+              it.m + ": " + it.n + " (" + it.s + ")",
+              el("div", {
+                cls: "mut",
+                text:
+                  trim(it.c * it.q, 4) +
+                  " kcal \u00b7 " +
+                  nutr({
+                    p: (it.p || 0) * it.q,
+                    cb: (it.cb || 0) * it.q,
+                    ft: (it.ft || 0) * it.q,
+                  }),
+              }),
+            ),
+            el("td", {}, q),
+            el(
+              "td",
+              {},
+              el("button", {
+                cls: "btn del",
+                type: "button",
+                "aria-label": "Remove food",
+                text: "Remove",
+                on: [
+                  "click",
+                  function () {
+                    D.items.splice(i, 1);
+                    renderMeals();
+                  },
+                ],
+              }),
+            ),
+          ),
+        );
+      });
+      card.appendChild(el("div", { cls: "scroll" }, t));
+      var tot = sumQ(
+        D.items.map(function (it) {
+          return { it: it, q: it.q };
+        }),
+      );
+      card.appendChild(
+        el("p", {
+          style: "font-weight:600",
+          text: "Plan total: " + fmtTot(tot),
+        }),
+      );
+      if (S.plan) {
+        var c = compute(S.plan),
+          df = tot.c - c.target;
+        card.appendChild(
+          el("p", {
+            cls: "mut",
+            text:
+              "Daily target: " +
+              r0(c.target) +
+              " kcal \u00b7 Protein " +
+              r0(c.protein) +
+              " g \u00b7 Carbs " +
+              r0(c.carbs) +
+              " g \u00b7 Fat " +
+              r0(c.fat) +
+              " g. This plan is " +
+              Math.abs(r0(df)) +
+              " kcal " +
+              (df >= 0 ? "above" : "below") +
+              " your target.",
+          }),
+        );
+      }
+    }
+    var se = el("div", { cls: "err", hidden: "hidden" });
+    card.appendChild(se);
+    card.appendChild(
+      el("button", {
+        cls: "btn",
+        type: "button",
+        text: D.id ? "Save changes" : "Save plan",
+        on: [
+          "click",
+          function () {
+            var errs = [],
+              name = D.name.trim();
+            if (name.length < 1 || name.length > 40)
+              errs.push("Plan name is required (up to 40 characters).");
+            if (
+              S.plans.some(function (p) {
+                return (
+                  p.id !== D.id && p.name.toLowerCase() === name.toLowerCase()
+                );
+              })
+            )
+              errs.push("You already have a plan with that name.");
+            if (!D.items.length)
+              errs.push("Add at least one food to the plan.");
+            if (!D.id && S.plans.length >= 50)
+              errs.push("You can save up to 50 plans.");
+            if (errs.length) {
+              showErr(se, errs);
+              return;
+            }
+            var items = D.items.map(function (it) {
+              return Object.assign({}, it);
+            });
+            items.sort(function (a, b) {
+              return SLOTS.indexOf(a.m) - SLOTS.indexOf(b.m);
+            });
+            var rec = {
+              id: D.id || newId(),
+              name: name,
+              days: D.days.slice(),
+              items: items,
+            };
+            if (D.id)
+              S.plans = S.plans.map(function (p) {
+                return p.id === D.id ? rec : p;
+              });
+            else S.plans.push(rec);
+            planDraft = newDraft();
+            save();
+            renderMeals();
+          },
+        ],
+      }),
+    );
+    if (D.id || D.name || D.items.length || D.days.length)
+      card.appendChild(
+        el("button", {
+          cls: "btn alt",
+          type: "button",
+          text: D.id ? "Cancel edit" : "Clear",
+          on: [
+            "click",
+            function () {
+              planDraft = newDraft();
+              renderMeals();
+            },
+          ],
+        }),
+      );
+    return card;
+  }
+  function plansListCard() {
+    var card = el(
+      "div",
+      { cls: "card" },
+      el("h2", { text: "Meal plans (" + S.plans.length + ")" }),
+    );
+    if (!S.plans.length) {
+      card.appendChild(
+        el("p", {
+          cls: "mut",
+          text: "No meal plans yet. Build one above, and it will appear in the Daily log.",
+        }),
+      );
+      return card;
+    }
+    S.plans.forEach(function (pl) {
+      var tot = sumQ(
+        pl.items.map(function (it) {
+          return { it: it, q: it.q };
+        }),
+      );
+      var blk = el(
+        "div",
+        { style: "padding:10px 0;border-bottom:1px solid var(--rule)" },
+        el("div", { style: "font-weight:600", text: pl.name }),
+        el("div", {
+          cls: "mut",
+          text:
+            (pl.days.length ? dayText(pl.days) : "Not assigned to a day") +
+            " \u00b7 " +
+            fmtTot(tot),
+        }),
+      );
+      pl.items.forEach(function (it) {
+        blk.appendChild(
+          el("div", {
+            cls: "mut",
+            text:
+              it.m +
+              ": " +
+              it.n +
+              " (" +
+              (it.q === 1 ? "" : trim(it.q, 6) + " x ") +
+              it.s +
+              ") \u00b7 " +
+              trim(it.c * it.q, 4) +
+              " kcal",
+          }),
+        );
+      });
+      blk.appendChild(
+        el(
+          "span",
+          { style: "display:inline-flex;gap:6px;margin-top:8px" },
+          el("button", {
+            cls: "btn del",
+            type: "button",
+            style: "color:var(--acc)",
+            text: "Edit",
+            on: [
+              "click",
+              function () {
+                planDraft = {
+                  id: pl.id,
+                  name: pl.name,
+                  days: pl.days.slice(),
+                  items: pl.items.map(function (it) {
+                    return Object.assign({}, it);
+                  }),
+                };
+                renderMeals();
+                var x = $("pn");
+                if (x) {
+                  x.focus();
+                  x.scrollIntoView({ block: "center" });
+                }
+              },
+            ],
+          }),
+          el("button", {
+            cls: "btn del",
+            type: "button",
+            style: "color:var(--acc)",
+            text: "Duplicate",
+            on: [
+              "click",
+              function () {
+                if (S.plans.length >= 50) return;
+                var base = pl.name.slice(0, 33) + " (copy)",
+                  nm = base,
+                  k = 2;
+                while (
+                  S.plans.some(function (p) {
+                    return p.name.toLowerCase() === nm.toLowerCase();
+                  })
+                )
+                  nm = base.slice(0, 33) + " (copy " + k++ + ")";
+                S.plans.push({
+                  id: newId(),
+                  name: nm,
+                  days: [],
+                  items: pl.items.map(function (it) {
+                    return Object.assign({}, it);
+                  }),
+                });
+                save();
+                renderMeals();
+              },
+            ],
+          }),
+          el("button", {
+            cls: "btn del",
+            type: "button",
+            text: "Delete",
+            on: [
+              "click",
+              function (e) {
+                var b = e.target;
+                if (b.dataset.s) {
+                  S.plans = S.plans.filter(function (p) {
+                    return p.id !== pl.id;
+                  });
+                  if (planDraft && planDraft.id === pl.id)
+                    planDraft = newDraft();
+                  save();
+                  renderMeals();
+                } else {
+                  b.dataset.s = "1";
+                  b.textContent = "Confirm";
+                }
+              },
+            ],
+          }),
+        ),
+      );
+      card.appendChild(blk);
+    });
+    return card;
+  }
+  /* ---------- meal plan generator ---------- */
+  /* Builds days of meals only from foods the user saved, using the nutrition
+     values the user entered. Servings are chosen in steps of 0.25 (up to 4, or 2 for oils and
+     low-calorie sides) so
+     calories and macros land close to the daily targets. Nothing is saved
+     until the user clicks Save. */
+  var GMAX = 4,
+    GSTEP = 0.25;
+  var genOpts = { days: 3, meals: 4, kcal: "", off: {}, seed: 1 },
+    genRes = null;
+  function macroTargets(T) {
+    var P = Math.min(1.6 * S.plan.kg, (T * 0.35) / 4),
+      F = (0.25 * T) / 9;
+    return { c: T, p: P, ft: F, cb: Math.max(0, (T - P * 4 - F * 9) / 4) };
+  }
+  function foodRole(f) {
+    var k = f.c || 1;
+    if ((4 * (f.p || 0)) / k >= 0.3) return "protein";
+    if (k < 80) return "light"; /* vegetables and other low-calorie sides */
+    if ((9 * (f.ft || 0)) / k >= 0.55) return "fat";
+    if ((4 * (f.cb || 0)) / k >= 0.55) return "carb";
+    return "mixed";
+  }
+  /* Why a saved food cannot be used by the generator, or "" if it can. */
+  function eligible(f) {
+    if (!((f.p || 0) + (f.cb || 0) + (f.ft || 0))) return "no macros entered";
+    if (f.c < 4) return "under 4 kcal per serving";
+    if (f.c > 1250) return "over 1,250 kcal per serving";
+    if (Math.max(f.p || 0, f.cb || 0, f.ft || 0) > 125)
+      return "over 125 g of one macro per serving";
+    return "";
+  }
+  function mulberry(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6d2b79f5) >>> 0;
+      var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  var GSLOTS = {
+    3: [
+      ["Breakfast", 0.3],
+      ["Lunch", 0.35],
+      ["Dinner", 0.35],
+    ],
+    4: [
+      ["Breakfast", 0.25],
+      ["Lunch", 0.3],
+      ["Dinner", 0.3],
+      ["Snack", 0.15],
+    ],
+  };
+  var GROLES = {
+    Breakfast: [["carb", "mixed"], ["protein"]],
+    Lunch: [["protein"], ["carb"], ["mixed", "fat", "light"]],
+    Dinner: [["protein"], ["carb"], ["mixed", "fat", "light"]],
+    Snack: [["mixed", "carb", "fat"]],
+  };
+  function pickFood(pool, roles, usage, rand, chosen) {
+    var c = pool.filter(function (f) {
+      return roles.indexOf(f.role) > -1 && chosen.indexOf(f) < 0;
+    });
+    if (!c.length)
+      c = pool.filter(function (f) {
+        return chosen.indexOf(f) < 0;
+      });
+    if (!c.length) return null;
+    var m = Math.min.apply(
+      null,
+      c.map(function (f) {
+        return usage[f.id] || 0;
+      }),
+    );
+    c = c.filter(function (f) {
+      return (usage[f.id] || 0) === m;
+    });
+    return c[Math.floor(rand() * c.length)];
+  }
+  function sq(x) {
+    return x * x;
+  }
+  function genDay(pool, T, nMeals, seed, usage) {
+    var rand = mulberry(seed),
+      slots = GSLOTS[nMeals],
+      tg = macroTargets(T),
+      items = [];
+    slots.forEach(function (sl, si) {
+      var chosen = [];
+      GROLES[sl[0]].forEach(function (roles) {
+        var f = pickFood(pool, roles, usage, rand, chosen);
+        if (f) {
+          chosen.push(f);
+          usage[f.id] = (usage[f.id] || 0) + 1;
+          items.push({
+            f: f,
+            s: si,
+            q: 1,
+            mx: f.role === "fat" || f.role === "light" ? 2 : GMAX,
+          });
+        }
+      });
+    });
+    function sums() {
+      var t = { c: 0, p: 0, cb: 0, ft: 0 },
+        sk = slots.map(function () {
+          return 0;
+        });
+      items.forEach(function (i) {
+        t.c += i.f.c * i.q;
+        t.p += (i.f.p || 0) * i.q;
+        t.cb += (i.f.cb || 0) * i.q;
+        t.ft += (i.f.ft || 0) * i.q;
+        sk[i.s] += i.f.c * i.q;
+      });
+      return { t: t, sk: sk };
+    }
+    function loss() {
+      var r = sums(),
+        t = r.t;
+      var L =
+        4 * sq((t.c - T) / T) +
+        2 * sq((t.p - tg.p) / Math.max(tg.p, 1)) +
+        sq((t.cb - tg.cb) / Math.max(tg.cb, 1)) +
+        sq((t.ft - tg.ft) / Math.max(tg.ft, 1));
+      slots.forEach(function (sl, si) {
+        L += sq((r.sk[si] - T * sl[1]) / T);
+      });
+      items.forEach(function (i) {
+        L += 0.05 * sq((i.q - 1) / GMAX);
+      }); /* prefer ordinary portions */
+      return L;
+    }
+    for (var pass = 0; pass < 400; pass++) {
+      var improved = false;
+      items.forEach(function (it) {
+        var best = loss(),
+          q0 = it.q;
+        [q0 + GSTEP, q0 - GSTEP].forEach(function (nq) {
+          if (nq < GSTEP - 1e-9 || nq > it.mx + 1e-9) return;
+          it.q = nq;
+          var l = loss();
+          if (l < best - 1e-12) {
+            best = l;
+            q0 = nq;
+            improved = true;
+          }
+        });
+        it.q = q0;
+      });
+      if (!improved) break;
+    }
+    var r = sums();
+    return {
+      tg: tg,
+      tot: r.t,
+      savedAs: null,
+      items: items.map(function (i) {
+        return {
+          n: i.f.n,
+          s: i.f.s,
+          c: i.f.c,
+          p: i.f.p,
+          cb: i.f.cb,
+          ft: i.f.ft,
+          q: i.q,
+          m: slots[i.s][0],
+        };
+      }),
+    };
+  }
+  function uniquePlanName(base) {
+    var n = base,
+      k = 2;
+    while (
+      S.plans.some(function (p) {
+        return p.name.toLowerCase() === n.toLowerCase();
+      })
+    )
+      n = base + " " + k++;
+    return n;
+  }
+  function saveGenDay(i) {
+    var d = genRes.days[i];
+    if (d.savedAs) return true;
+    if (S.plans.length >= 50) {
+      genRes.err = "You can save up to 50 plans.";
+      return false;
+    }
+    var nm = uniquePlanName("Generated meal " + (i + 1));
+    S.plans.push({
+      id: newId(),
+      name: nm,
+      days: [],
+      items: d.items.map(function (it) {
+        return Object.assign({}, it);
+      }),
+    });
+    d.savedAs = nm;
+    save();
+    return true;
+  }
+  function generatorCard() {
+    var card = el(
+      "div",
+      { cls: "card" },
+      el("h2", { text: "Generate a meal plan" }),
+    );
+    if (!S.plan) {
+      card.appendChild(
+        el("p", {
+          cls: "mut",
+          text: "Save your plan first (Plan tab). The generator uses your calorie and macro targets.",
+        }),
+      );
+      return card;
+    }
+    if (!S.foods.length) {
+      card.appendChild(
+        el("p", {
+          cls: "mut",
+          text: "Save some foods in My foods first. The generator builds meals from the foods you saved, using the nutrition values you entered.",
+        }),
+      );
+      return card;
+    }
+    var c = compute(S.plan);
+    if (genOpts.kcal === "") genOpts.kcal = String(r0(c.target));
+    card.appendChild(
+      el("p", {
+        cls: "mut",
+        text: "Builds meals from the foods you tick below so the day lands close to your calorie and macro targets. Nothing is saved until you click Save.",
+      }),
+    );
+    var dS = el("select"),
+      mS = el("select"),
+      kI = el("input", { "data-num": "1", value: genOpts.kcal });
+    for (var i = 1; i <= 7; i++)
+      dS.appendChild(
+        el("option", { value: i, text: i + (i === 1 ? " day" : " days") }),
+      );
+    dS.value = String(genOpts.days);
+    mS.appendChild(el("option", { value: "3", text: "3 meals" }));
+    mS.appendChild(el("option", { value: "4", text: "3 meals and a snack" }));
+    mS.value = String(genOpts.meals);
+    dS.addEventListener("change", function () {
+      genOpts.days = +dS.value;
+    });
+    mS.addEventListener("change", function () {
+      genOpts.meals = +mS.value;
+    });
+    kI.addEventListener("input", function () {
+      genOpts.kcal = kI.value;
+    });
+    card.appendChild(
+      el(
+        "div",
+        { cls: "grid" },
+        el("label", { text: "Days to generate" }, dS),
+        el("label", { text: "Meals per day" }, mS),
+        el("label", { text: "Daily calories (" + c.floor + " to 6,000)" }, kI),
+      ),
+    );
+    card.appendChild(
+      el("div", {
+        style: "font-size:14px;font-weight:600;margin-top:10px",
+        text: "Foods to use",
+      }),
+    );
+    var box = el("div", {
+      style:
+        "max-height:200px;overflow:auto;border:1px solid var(--rule);border-radius:6px;padding:4px 8px;margin-top:4px",
+    });
+    sortedFoods().forEach(function (f) {
+      var cb = el("input", {
+        type: "checkbox",
+        style: "width:auto;margin:0 8px 0 0",
+      });
+      cb.checked = !genOpts.off[f.id];
+      cb.addEventListener("change", function () {
+        genOpts.off[f.id] = !cb.checked;
+      });
+      box.appendChild(
+        el(
+          "label",
+          {
+            style:
+              "display:flex;align-items:center;font-weight:400;padding:4px 0",
+          },
+          cb,
+          f.n + " (" + f.s + ") \u00b7 " + trim(f.c, 6) + " kcal",
+        ),
+      );
+    });
+    card.appendChild(box);
+    var ge = el("div", { cls: "err", hidden: "hidden" });
+    card.appendChild(ge);
+    card.appendChild(
+      el("button", {
+        cls: "btn",
+        type: "button",
+        text: "Generate",
+        on: [
+          "click",
+          function () {
+            var errs = [],
+              T = num(genOpts.kcal),
+              pool = [],
+              skipped = [];
+            if (!isFinite(T) || T < c.floor || T > 6000)
+              errs.push(
+                "Daily calories must be a number from " +
+                  c.floor +
+                  " to 6,000.",
+              );
+            sortedFoods().forEach(function (f) {
+              if (genOpts.off[f.id]) return;
+              var why = eligible(f);
+              if (why) skipped.push(f.n + " (" + why + ")");
+              else pool.push(Object.assign({ role: foodRole(f) }, f));
+            });
+            if (pool.length < 2)
+              errs.push(
+                "Tick at least 2 foods that have calories and at least one macro filled in." +
+                  (skipped.length
+                    ? " Skipped: " + skipped.join(", ") + "."
+                    : ""),
+              );
+            if (errs.length) {
+              showErr(ge, errs);
+              return;
+            }
+            var usage = {},
+              days = [],
+              seed = genOpts.seed++;
+            for (var k = 0; k < genOpts.days; k++)
+              days.push(genDay(pool, T, genOpts.meals, seed * 100 + k, usage));
+            genRes = { days: days, skipped: skipped, T: T, err: "" };
+            renderMeals();
+          },
+        ],
+      }),
+    );
+    return card;
+  }
+  function genPreviewCard() {
+    if (!genRes) return null;
+    var card = el(
+      "div",
+      { cls: "card" },
+      el("h2", { text: "Generated meal plans" }),
+    );
+    if (genRes.skipped.length)
+      card.appendChild(
+        el("p", {
+          cls: "mut",
+          text: "Skipped: " + genRes.skipped.join(", ") + ".",
+        }),
+      );
+    genRes.days.forEach(function (d, di) {
+      var blk = el(
+        "div",
+        { style: "padding:10px 0;border-top:1px solid var(--rule)" },
+        el("div", { style: "font-weight:600", text: "Meal plan " + (di + 1) }),
+      );
+      var t = el("table");
+      d.items.forEach(function (it) {
+        t.appendChild(
+          el(
+            "tr",
+            {},
+            el(
+              "td",
+              {},
+              it.m +
+                ": " +
+                it.n +
+                " (" +
+                (it.q === 1 ? "" : trim(it.q, 6) + " x ") +
+                it.s +
+                ")",
+              el("div", {
+                cls: "mut",
+                text:
+                  "Per serving: " + trim(it.c, 6) + " kcal \u00b7 " + nutr(it),
+              }),
+            ),
+            el(
+              "td",
+              {},
+              trim(it.c * it.q, 4) + " kcal",
+              el("div", {
+                cls: "mut",
+                text: nutr({
+                  p: (it.p || 0) * it.q,
+                  cb: (it.cb || 0) * it.q,
+                  ft: (it.ft || 0) * it.q,
+                }),
+              }),
+            ),
+          ),
+        );
+      });
+      blk.appendChild(el("div", { cls: "scroll" }, t));
+      var x = d.tot,
+        g = d.tg,
+        dc = x.c - g.c;
+      blk.appendChild(
+        el("p", { style: "font-weight:600", text: "Total: " + fmtTot(x) }),
+      );
+      blk.appendChild(
+        el("p", {
+          cls: "mut",
+          text:
+            "Target: " +
+            r0(g.c) +
+            " kcal \u00b7 Protein " +
+            r0(g.p) +
+            " g \u00b7 Carbs " +
+            r0(g.cb) +
+            " g \u00b7 Fat " +
+            r0(g.ft) +
+            " g. Calories are " +
+            Math.abs(r0(dc)) +
+            " kcal (" +
+            (Math.abs(dc / g.c) * 100).toFixed(1) +
+            "%) " +
+            (dc >= 0 ? "above" : "below") +
+            " the target; protein " +
+            (x.p - g.p >= 0 ? "+" : "-") +
+            Math.abs(r0(x.p - g.p)) +
+            " g, carbs " +
+            (x.cb - g.cb >= 0 ? "+" : "-") +
+            Math.abs(r0(x.cb - g.cb)) +
+            " g, fat " +
+            (x.ft - g.ft >= 0 ? "+" : "-") +
+            Math.abs(r0(x.ft - g.ft)) +
+            " g.",
+        }),
+      );
+      if (
+        Math.abs(dc / g.c) > 0.05 ||
+        Math.abs(x.p - g.p) / Math.max(g.p, 1) > 0.15
+      )
+        blk.appendChild(
+          el("div", {
+            cls: "note w",
+            text: "This plan could not match your targets closely with the foods selected. Add a protein source and a carb source, or tick more foods, and generate again.",
+          }),
+        );
+      if (d.savedAs)
+        blk.appendChild(
+          el("p", {
+            cls: "mut",
+            text:
+              "Saved as \u201c" +
+              d.savedAs +
+              "\u201d. Find it in Meal plans below, where you can rename it and assign weekdays.",
+          }),
+        );
+      else
+        blk.appendChild(
+          el("button", {
+            cls: "btn",
+            type: "button",
+            text: "Save as meal plan",
+            on: [
+              "click",
+              function () {
+                genRes.err = "";
+                saveGenDay(di);
+                renderMeals();
+              },
+            ],
+          }),
+        );
+      card.appendChild(blk);
+    });
+    if (genRes.err)
+      card.appendChild(el("div", { cls: "err", text: genRes.err }));
+    if (
+      genRes.days.length > 1 &&
+      genRes.days.some(function (d) {
+        return !d.savedAs;
+      })
+    )
+      card.appendChild(
+        el("button", {
+          cls: "btn",
+          type: "button",
+          text: "Save all",
+          on: [
+            "click",
+            function () {
+              genRes.err = "";
+              for (var i = 0; i < genRes.days.length; i++)
+                if (!saveGenDay(i)) break;
+              renderMeals();
+            },
+          ],
+        }),
+      );
+    card.appendChild(
+      el("p", {
+        cls: "mut",
+        text: "Built only from the foods you saved, using the nutrition values you entered. Check allergies, dietary needs, and portion sizes yourself. This is not medical or dietitian advice.",
+      }),
+    );
+    return card;
+  }
+
+  function renderMeals() {
+    var host = $("meals");
+    clear(host);
+    if (!planDraft) planDraft = newDraft();
+    host.appendChild(foodFormCard());
+    host.appendChild(foodListCard());
+    host.appendChild(generatorCard());
+    var gp = genPreviewCard();
+    if (gp) host.appendChild(gp);
+    host.appendChild(planBuilderCard());
+    host.appendChild(plansListCard());
   }
 
   /* ---------- fasting ---------- */
