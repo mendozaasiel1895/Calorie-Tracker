@@ -26,99 +26,90 @@
         <button role="tab" data-t="today" aria-selected="false">
           Daily log
         </button>
+        <button role="tab" data-t="fast" aria-selected="false">Fasting</button>
         <button role="tab" data-t="prog" aria-selected="false">Progress</button>
       </nav>
 
       <section id="plan">
-        <nav id="subtabs" role="tablist" aria-label="Plan sections">
-          <button role="tab" data-s="targets" aria-selected="true">
-            Targets
+        <form id="pf" class="card" novalidate>
+          <h2>Your details</h2>
+          <div class="grid">
+            <label
+              >Goal*<select id="gl">
+                <option value="lose">Lose weight</option>
+                <option value="maintain">Maintain weight</option>
+                <option value="gain">Gain weight</option>
+              </select></label
+            >
+            <label
+              >Sex*<select id="sex">
+                <option value="m">Male</option>
+                <option value="f">Female</option>
+              </select></label
+            >
+            <label
+              >Age (18 to 80)*<input
+                id="age"
+                inputmode="numeric"
+                step="1"
+                value="31"
+            /></label>
+            <label
+              >Height unit*<select id="hu">
+                <option value="ftin">ft + in</option>
+                <option value="cm">cm</option>
+              </select></label
+            >
+            <label
+              >Height*<span class="row"
+                ><input
+                  id="h1"
+                  step="any"
+                  value="5"
+                  aria-label="feet or cm" /><input
+                  id="h2"
+                  step="any"
+                  value="11"
+                  aria-label="inches" /></span
+            ></label>
+            <label
+              >Weight unit*<select id="wu">
+                <option value="kg">kg</option>
+                <option value="lb">lb</option>
+              </select></label
+            >
+            <label
+              >Current weight*<input id="wt" step="any" value="90"
+            /></label>
+            <label>Goal weight*<input id="gw" step="any" value="80" /></label>
+            <label
+              >Duration (in months)*<input id="mo" step="1" value="6"
+            /></label>
+            <label>Start date*<input id="sd" type="date" /></label>
+            <label>Activity level*<select id="act"></select></label>
+            <label
+              >Eat back exercise calories*<select id="eat">
+                <option value="0">0% (strict)</option>
+                <option value="50" selected>50% (good for losing)</option>
+                <option value="100">100% (good for gaining)</option>
+              </select></label
+            >
+          </div>
+          <p class="mut">Fields marked * are required.</p>
+        </form>
+        <div id="meals"></div>
+        <div class="card">
+          <div id="perr" class="err" hidden></div>
+          <button class="btn" type="submit" form="pf">
+            Calculate and save plan
           </button>
-          <button role="tab" data-s="meals" aria-selected="false">Meals</button>
-          <button role="tab" data-s="fast" aria-selected="false">
-            Fasting
-          </button>
-        </nav>
-        <div id="ptargets">
-          <form id="pf" class="card" novalidate>
-            <h2>Your details</h2>
-            <div class="grid">
-              <label
-                >Goal<select id="gl">
-                  <option value="lose">Lose weight</option>
-                  <option value="maintain">Maintain weight</option>
-                  <option value="gain">Gain weight</option>
-                </select></label
-              >
-              <label
-                >Sex<select id="sex">
-                  <option value="m">Male</option>
-                  <option value="f">Female</option>
-                </select></label
-              >
-              <label
-                >Age (18 to 80)<input
-                  id="age"
-                  inputmode="numeric"
-                  step="1"
-                  value="31"
-              /></label>
-              <label
-                >Height unit<select id="hu">
-                  <option value="ftin">ft + in</option>
-                  <option value="cm">cm</option>
-                </select></label
-              >
-              <label
-                >Height<span class="row"
-                  ><input
-                    id="h1"
-                    step="any"
-                    value="5"
-                    aria-label="feet or cm" /><input
-                    id="h2"
-                    step="any"
-                    value="11"
-                    aria-label="inches" /></span
-              ></label>
-              <label
-                >Weight unit<select id="wu">
-                  <option value="kg">kg</option>
-                  <option value="lb">lb</option>
-                </select></label
-              >
-              <label
-                >Current weight<input id="wt" step="any" value="90"
-              /></label>
-              <label>Goal weight<input id="gw" step="any" value="80" /></label>
-              <label
-                >Duration (1 to 24 months)<input id="mo" step="1" value="6"
-              /></label>
-              <label>Start date<input id="sd" type="date" /></label>
-              <label
-                >Daily life activity, not counting logged workouts<select
-                  id="act"
-                ></select
-              ></label>
-              <label
-                >Eat back exercise calories<select id="eat">
-                  <option value="0">0% (strict)</option>
-                  <option value="50" selected>50% (good for losing)</option>
-                  <option value="100">100% (good for gaining)</option>
-                </select></label
-              >
-            </div>
-            <div id="perr" class="err" hidden></div>
-            <button class="btn" type="submit">Calculate and save plan</button>
-          </form>
-          <div id="pres"></div>
         </div>
-        <div id="meals" hidden></div>
-        <div id="fast" hidden></div>
       </section>
 
       <section id="today" hidden></section>
+      <section id="fast" hidden></section>
       <section id="prog" hidden></section>
+      <div id="modal" hidden></div>
     </main>
   </body>
 </html>

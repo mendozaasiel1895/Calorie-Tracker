@@ -37,9 +37,9 @@ cd <your-repo>
 
 ## How to use
 
-The app has three tabs: **Plan**, **Daily log**, and **Progress**. The Plan tab has three sections: **Targets**, **Meals**, and **Fasting**. A fast in progress also shows at the top of the Daily log.
+The app has four tabs: **Plan**, **Daily log**, **Fasting**, and **Progress**. The Plan tab has your details, then a **Meals** section, then the **Calculate and save plan** button. A fast in progress also shows at the top of the Daily log. Fields marked \* are required.
 
-1. **Plan tab, Targets section**: pick your goal, fill in your details, and click **Calculate and save plan**. The app shows your BMR, maintenance calories, daily deficit or surplus, calorie target, expected weekly loss, BMI, and macro targets.
+1. **Plan tab**: pick your goal, fill in your details, set up your meals (or tick "I will use the Daily log"), and click **Calculate and save plan** at the bottom. A pop-up shows your BMR, maintenance calories, daily deficit or surplus, calorie target, expected weekly loss, BMI, and macro targets, followed by your meal plans with the nutrition of every food, and an **Open daily log** button.
 2. **Daily log tab**: pick a date, then add what you ate and any exercise. Each food shows its calories, protein, carbs, and fat. The large number shows calories left in today's budget.
 3. **Progress tab**: save weigh-ins (use **Edit** or **Delete** on a row to fix a mistake; the plan start weigh-in is changed on the Plan tab), see your weight chart and how far you are from your goal, read the weekly check, and review the last 14 days. Tap a date in the last 14 days to open the foods you ate that day with their calories and nutrients.
 
@@ -57,8 +57,8 @@ Changing the goal sets this to 50% for losing and 100% for maintaining or gainin
 
 Because your maintenance calories do not include logged workouts, your budget goes up when you log exercise unless this is set to 0%. When gaining, the daily log shows "kcal to reach target" so you know how much more to eat.
 
-4. **Plan tab, Fasting section**: answer the safety check to unlock it, choose your fasting type and hours, then start and end fasts or log past ones.
-5. **Plan tab, Meals section**: save your common foods (per serving), then build meal plans such as "Monday meal" from them. In the Daily log, **Add food** lets you type a food, pick one from My foods, or pick a meal plan.
+4. **Fasting tab**: answer the safety check to unlock it, choose your fasting type and hours, then start and end fasts or log past ones.
+5. **Plan tab, Meals section**: save your common foods (per serving), then build meal plans such as "Monday meal" from them. If you do not want a meal plan, tick **I will use the Daily log**. When you have a meal plan, the Daily log shows its meals first, with each food's nutrition, and keeps the **Add food** card behind an **Add food manually** button for anything you eat outside the plan. Without a meal plan, **Add food** lets you type a food or pick one from My foods.
 
 ## Meals: My foods and meal plans
 
@@ -66,9 +66,9 @@ Because your maintenance calories do not include logged workouts, your budget go
 
 **Food type and tags.** Each saved food has a type (protein, grain or starch, vegetable, fruit, dairy, fat or nut, or other) and a "Contains" list (meat, fish, shellfish, eggs, dairy, gluten, peanuts, tree nuts, soy). Tick "I have checked this food's ingredients" so filters can trust the tags. A food that was never checked is treated as unknown.
 
-**Starter foods.** The Meals section includes 25 common foods (chicken, salmon, eggs, tofu, lentils, beans, chickpeas, yogurt, milk, rice, pasta, quinoa, oats, potatoes, fruit, vegetables, almonds, olive oil, avocado). Tick the ones you want and add them to My foods, where you can edit them. Values per serving are worked out from USDA FoodData Central (SR Legacy) values per 100 g. Calories and protein were cross-checked against several USDA-derived sources, and carbs and fat use the standard SR Legacy values and agree with the calories within about 12% using 4 kcal per gram of protein and carbs and 9 per gram of fat. The exceptions are high-fiber vegetables (broccoli and spinach), where the difference is larger because fiber counts as carbohydrate but gives little energy. Cooking, brands, and varieties change nutrition, so check your own labels.
+**Starter foods.** The Meals section includes 25 common foods (chicken, salmon, eggs, tofu, lentils, beans, chickpeas, yogurt, milk, rice, pasta, quinoa, oats, potatoes, fruit, vegetables, almonds, olive oil, avocado). Foods are grouped in drop-down lists by type: click a group to open it, tick the ones you want, and add them to My foods, where you can edit them. Values per serving are worked out from USDA FoodData Central (SR Legacy) values per 100 g. Calories and protein were cross-checked against several USDA-derived sources, and carbs and fat use the standard SR Legacy values and agree with the calories within about 12% using 4 kcal per gram of protein and carbs and 9 per gram of fat. The exceptions are high-fiber vegetables (broccoli and spinach), where the difference is larger because fiber counts as carbohydrate but gives little energy. Cooking, brands, and varieties change nutrition, so check your own labels.
 
-**Meal plans.** A plan is a named set of foods, each with a number of servings and a meal slot (Breakfast, Lunch, Dinner, or Snack). You can assign a plan to weekdays, duplicate it, edit it, and delete it. While you build a plan, the app shows its total calories and macros next to your daily target.
+**Meal plans.** A meal plan you are building is saved when you click **Calculate and save plan**. A plan is a named set of foods, each with a number of servings and a meal slot (Breakfast, Lunch, Dinner, or Snack). You can assign a plan to weekdays, duplicate it, edit it, and delete it. While you build a plan, the app shows its total calories and macros next to your daily target.
 
 **In the Daily log.** The **Add food** card has a source choice:
 
@@ -103,7 +103,7 @@ The generator uses only the nutrition values you entered and knows nothing about
 
 ## Fasting
 
-The Fasting section of the Plan tab tracks daily **time-restricted eating**: you fast for a set number of hours and eat in the remaining window. It does not change your calorie target. There is no single worldwide standard for fasting; the definitions here follow published reviews, which describe intermittent fasting as fasting for 12 hours or more and time-restricted eating as a daily eating window of roughly 8 to 12 hours.
+The Fasting tab tracks daily **time-restricted eating**: you fast for a set number of hours and eat in the remaining window. It does not change your calorie target. There is no single worldwide standard for fasting; the definitions here follow published reviews, which describe intermittent fasting as fasting for 12 hours or more and time-restricted eating as a daily eating window of roughly 8 to 12 hours.
 
 **Safety check.** Fasting stays locked until you answer six yes-or-no statements and confirm your answers are accurate. If any statement applies (diabetes or blood-sugar medication, pregnancy or breastfeeding, an eating disorder history, kidney, liver, heart or blood pressure disease or medication that must be taken with food, recovery from surgery or serious illness, or a doctor's advice not to fast or any doubt), the feature stays locked and you are told to talk to a doctor. Your individual answers are not saved, only whether you passed. Fasting also stays locked while your current BMI is below 18.5. Using **Retake safety check** locks fasting again and discards any fast in progress.
 
@@ -228,7 +228,7 @@ Number fields only accept digits and one decimal point. Letters, minus signs, ex
 
 ```
 .
-├── Calorie Tracker.html   # Page markup (three tabs; the Plan tab has Targets, Meals, and Fasting sections)
+├── Calorie Tracker.html   # Page markup (four tabs: Plan, Daily log, Fasting, Progress; needs the pop-up container)
 ├── Calorie Tracker.css    # Styles
 ├── Calorie Tracker.js     # Logic, calculations, validation, storage
 └── README.md

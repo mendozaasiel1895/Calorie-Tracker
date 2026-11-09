@@ -438,47 +438,29 @@
   }
 
   /* ---------- tabs ---------- */
-  var tabs = document.querySelectorAll("#tabs button"),
-    subtabs = document.querySelectorAll("#subtabs button"),
-    planSub = "targets"; /* section of the Plan tab: targets, meals, or fast */
+  var tabs = document.querySelectorAll("#tabs button");
   function show(t) {
     if (t !== "prog") editW = null;
-    if (t !== "plan") editF = null;
-    if (t !== "plan" && t !== "today")
+    if (t !== "fast") editF = null;
+    if (t !== "fast" && t !== "today")
       stopTick(); /* only the fasting timer ticks, and only on these tabs */
     tabs.forEach(function (b) {
       b.setAttribute("aria-selected", b.dataset.t === t);
     });
-    ["plan", "today", "prog"].forEach(function (s) {
+    ["plan", "today", "fast", "prog"].forEach(function (s) {
       $(s).hidden = s !== t;
     });
-    if (t === "today") renderToday();
-    if (t === "prog") renderProg();
-    if (t === "plan") showSub(planSub);
-  }
-  function showSub(s) {
-    planSub = s;
-    subtabs.forEach(function (b) {
-      b.setAttribute("aria-selected", b.dataset.s === s);
-    });
-    var ids = { targets: "ptargets", meals: "meals", fast: "fast" };
-    for (var k in ids) $(ids[k]).hidden = k !== s;
-    if (s !== "fast") {
-      editF = null;
-      stopTick();
+    if (t === "plan") {
+      renderPlan();
+      renderMeals();
     }
-    if (s === "targets") renderPlan();
-    if (s === "meals") renderMeals();
-    if (s === "fast") renderFast();
+    if (t === "today") renderToday();
+    if (t === "fast") renderFast();
+    if (t === "prog") renderProg();
   }
   tabs.forEach(function (b) {
     b.addEventListener("click", function () {
       show(b.dataset.t);
-    });
-  });
-  subtabs.forEach(function (b) {
-    b.addEventListener("click", function () {
-      showSub(b.dataset.s);
     });
   });
 
@@ -616,6 +598,7 @@
           );
       }
     }
+    if (!S.skipMeals) errs = errs.concat(draftErrors());
     var box = $("perr");
     if (errs.length) {
       clear(box);
@@ -647,10 +630,151 @@
       return w.d !== sd;
     });
     S.weights.push({ d: sd, kg: wt });
+    if (!S.skipMeals) commitDraft();
     save();
-    renderPlan();
-    $("pres").scrollIntoView({ behavior: "smooth" });
+    renderMeals();
+    showResult();
   });
+
+  /* ---------- result pop-up ---------- */
+  function closeModal() {
+    var m = $("modal");
+    clear(m);
+    m.hidden = true;
+  }
+  function openModal(node) {
+    var m = $("modal");
+    clear(m);
+    m.setAttribute(
+      "style",
+      "position:fixed;top:0;left:0;right:0;bottom:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.55)",
+    );
+    m.hidden = false;
+    var box = el(
+      "div",
+      {
+        role: "dialog",
+        "aria-modal": "true",
+        "aria-label": "Your plan",
+        tabindex: "-1",
+        style:
+          "background:var(--bg);color:var(--ink);border-radius:var(--r);padding:12px;max-width:680px;width:100%;max-height:88vh;overflow:auto",
+      },
+      node,
+    );
+    m.appendChild(box);
+    if (box.focus) box.focus();
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeModal();
+  });
+  $("modal").addEventListener("click", function (e) {
+    if (e.target === $("modal")) closeModal();
+  });
+  function mealSummary() {
+    var card = el(
+      "div",
+      { cls: "card" },
+      el("h2", { text: "Your meal plans" }),
+    );
+    if (S.skipMeals) {
+      card.appendChild(
+        el("p", {
+          cls: "mut",
+          text: "You chose to log your meals in the Daily log.",
+        }),
+      );
+      return card;
+    }
+    if (!S.plans.length) {
+      card.appendChild(
+        el("p", {
+          cls: "mut",
+          text: "No meal plan added yet. You can log foods in the Daily log.",
+        }),
+      );
+      return card;
+    }
+    S.plans.forEach(function (pl) {
+      var tot = sumQ(
+        pl.items.map(function (it) {
+          return { it: it, q: it.q };
+        }),
+      );
+      var blk = el(
+        "div",
+        { style: "padding:8px 0;border-top:1px solid var(--rule)" },
+        el("div", { style: "font-weight:700", text: pl.name }),
+        el("div", {
+          text:
+            (pl.days.length ? dayText(pl.days) : "Not assigned to a day") +
+            " \u00b7 " +
+            fmtTot(tot),
+        }),
+      );
+      pl.items.forEach(function (it) {
+        blk.appendChild(
+          el(
+            "div",
+            { style: "margin-top:6px" },
+            el("div", {
+              style: "font-weight:700",
+              text:
+                it.m +
+                ": " +
+                it.n +
+                " (" +
+                (it.q === 1 ? "" : trim(it.q, 6) + " x ") +
+                it.s +
+                ")",
+            }),
+            el("div", {
+              text:
+                trim(it.c * it.q, 4) +
+                " kcal \u00b7 " +
+                nutr({
+                  p: (it.p || 0) * it.q,
+                  cb: (it.cb || 0) * it.q,
+                  ft: (it.ft || 0) * it.q,
+                }),
+            }),
+          ),
+        );
+      });
+      card.appendChild(blk);
+    });
+    return card;
+  }
+  function showResult() {
+    var wrap = el("div");
+    wrap.appendChild(planCard());
+    wrap.appendChild(mealSummary());
+    var bar = el("div", { cls: "card" });
+    bar.appendChild(
+      el("button", {
+        cls: "btn",
+        type: "button",
+        text: "Open daily log",
+        on: [
+          "click",
+          function () {
+            closeModal();
+            show("today");
+          },
+        ],
+      }),
+    );
+    bar.appendChild(
+      el("button", {
+        cls: "btn alt",
+        type: "button",
+        text: "Close",
+        on: ["click", closeModal],
+      }),
+    );
+    wrap.appendChild(bar);
+    openModal(wrap);
+  }
 
   function row(a, b, c) {
     return el(
@@ -661,11 +785,10 @@
     );
   }
   function renderPlan() {
-    var host = $("pres");
-    clear(host);
+    if (S.plan) fillForm(S.plan);
+  }
+  function planCard() {
     var p = S.plan;
-    if (!p) return;
-    fillForm(p);
     var c = compute(p);
     var card = el("div", { cls: "card" }, el("h2", { text: "Your targets" }));
     var type = c.type,
@@ -788,20 +911,7 @@
         text: "Estimates only. Real results vary, so use your weekly weigh-ins to adjust. If you have a medical condition, check with a doctor before changing your calorie intake for a long period.",
       }),
     );
-    card.appendChild(
-      el("button", {
-        cls: "btn",
-        type: "button",
-        text: "Open daily log",
-        on: [
-          "click",
-          function () {
-            show("today");
-          },
-        ],
-      }),
-    );
-    host.appendChild(card);
+    return card;
   }
 
   /* ---------- daily log ---------- */
@@ -929,14 +1039,12 @@
     host.appendChild(dc);
 
     /* food */
-    var psc = planShortcut(L, d);
-    if (psc) host.appendChild(psc);
     var fc = el("form", { novalidate: "novalidate" });
     var g = el("div", { cls: "grid" });
     g.appendChild(
       el(
         "label",
-        { text: "Food name" },
+        { text: "Food name *" },
         el("input", { id: "fn", maxlength: "60" }),
       ),
     );
@@ -944,11 +1052,11 @@
     ["Breakfast", "Lunch", "Dinner", "Snack"].forEach(function (m) {
       ms.appendChild(el("option", { text: m }));
     });
-    g.appendChild(el("label", { text: "Meal" }, ms));
+    g.appendChild(el("label", { text: "Meal *" }, ms));
     g.appendChild(
       el(
         "label",
-        { text: "Calories (kcal)" },
+        { text: "Calories (kcal) *" },
         el("input", {
           id: "fc",
 
@@ -960,23 +1068,15 @@
     g.appendChild(
       el(
         "label",
-        { text: "Protein g (optional)" },
+        { text: "Protein g" },
         el("input", { id: "fp", step: "any" }),
       ),
     );
     g.appendChild(
-      el(
-        "label",
-        { text: "Carbs g (optional)" },
-        el("input", { id: "fb", step: "any" }),
-      ),
+      el("label", { text: "Carbs g" }, el("input", { id: "fb", step: "any" })),
     );
     g.appendChild(
-      el(
-        "label",
-        { text: "Fat g (optional)" },
-        el("input", { id: "ff", step: "any" }),
-      ),
+      el("label", { text: "Fat g" }, el("input", { id: "ff", step: "any" })),
     );
     fc.appendChild(g);
     var fe = el("div", { cls: "err", hidden: "hidden" });
@@ -1024,7 +1124,26 @@
       save();
       renderToday();
     });
-    host.appendChild(addFoodCard(fc, L));
+    if (S.plans.length && !S.skipMeals) {
+      host.appendChild(mealsCard(L, d));
+      var addCard = addFoodCard(fc, L);
+      addCard.hidden = !showManual;
+      host.appendChild(
+        el("button", {
+          cls: "btn alt",
+          type: "button",
+          text: showManual ? "Hide manual entry" : "Add food manually",
+          on: [
+            "click",
+            function () {
+              showManual = !showManual;
+              renderToday();
+            },
+          ],
+        }),
+      );
+      host.appendChild(addCard);
+    } else host.appendChild(addFoodCard(fc, L));
     host.appendChild(
       listCard(
         "Food eaten",
@@ -1069,12 +1188,12 @@
       lI = el("label", { text: "Level" }, xi),
       lV = el("label", { text: "Speed" }, xvI),
       lU = el("label", { text: "Speed unit" }, xu),
-      lR = el("label", { text: "Grade % (optional, 1 to 15)" }, xrI);
+      lR = el("label", { text: "Grade % (1 to 15)" }, xrI);
     xg.appendChild(el("label", { text: "Activity" }, xs));
     [lT, lI, lV, lU, lR].forEach(function (n) {
       xg.appendChild(n);
     });
-    xg.appendChild(el("label", { text: "Minutes (1 to 600)" }, xmI));
+    xg.appendChild(el("label", { text: "Minutes (1 to 600) *" }, xmI));
     xc.appendChild(xg);
     var xe = el("div", { cls: "err", hidden: "hidden" });
     xc.appendChild(xe);
@@ -1295,7 +1414,8 @@
   var editFood = null,
     planDraft = null,
     foodQ = "",
-    addMode = "manual";
+    addMode = "manual",
+    showManual = false;
   /* Food types and tags. Diet and allergen filters use the tags the user (or
      the starter list) assigned; a food that was never checked is treated as
      unknown and is left out whenever a filter is on. */
@@ -1666,6 +1786,50 @@
     });
     return errs;
   }
+  /* Drop-down group: click the heading to show or hide its foods. */
+  var openGroups = {};
+  function accGroup(key, title, count, body) {
+    var wrap = el("div", { style: "border-bottom:1px solid var(--rule)" }),
+      label = function () {
+        return (
+          (openGroups[key] ? "\u25be " : "\u25b8 ") + title + " (" + count + ")"
+        );
+      },
+      head = el("button", {
+        type: "button",
+        "aria-expanded": String(!!openGroups[key]),
+        style:
+          "display:block;width:100%;background:none;border:0;padding:12px 4px;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;text-align:left",
+        text: label(),
+      });
+    body.hidden = !openGroups[key];
+    head.addEventListener("click", function () {
+      openGroups[key] = !openGroups[key];
+      body.hidden = !openGroups[key];
+      head.setAttribute("aria-expanded", String(!!openGroups[key]));
+      head.textContent = label();
+    });
+    wrap.appendChild(head);
+    wrap.appendChild(body);
+    return wrap;
+  }
+  /* A food: name in bold, nutrition facts below it in regular type. */
+  function foodRow(cb, name, facts) {
+    return el(
+      "label",
+      {
+        style:
+          "display:flex;align-items:flex-start;font-weight:400;padding:8px 4px",
+      },
+      cb,
+      el(
+        "div",
+        {},
+        el("div", { style: "font-weight:700", text: name }),
+        el("div", { style: "font-weight:400;margin-top:2px", text: facts }),
+      ),
+    );
+  }
   function sortedFoods() {
     return S.foods.slice().sort(function (a, b) {
       var x = a.n.toLowerCase(),
@@ -1738,9 +1902,9 @@
         el(
           "div",
           { cls: "grid" },
-          el("label", { text: "Food" }, fsel),
-          el("label", { text: "Servings (0.25 to 20)" }, fq),
-          el("label", { text: "Meal" }, fmS),
+          el("label", { text: "Food *" }, fsel),
+          el("label", { text: "Servings (0.25 to 20) *" }, fq),
+          el("label", { text: "Meal *" }, fmS),
         ),
       );
       var fv = el("p", { cls: "mut", text: "" }),
@@ -1792,6 +1956,21 @@
       );
     }
 
+    var pp = buildPlanPanel(L, "");
+    var sync = function () {
+      addMode = src.value;
+      fc.hidden = addMode !== "manual";
+      pf.hidden = addMode !== "foods";
+      pp.hidden = addMode !== "plan";
+    };
+    src.addEventListener("change", sync);
+    card.appendChild(fc);
+    card.appendChild(pf);
+    card.appendChild(pp);
+    sync();
+    return card;
+  }
+  function buildPlanPanel(L, defId) {
     var pp = el("div");
     if (!S.plans.length)
       pp.appendChild(
@@ -1928,88 +2107,33 @@
         }),
       );
     }
-    var sync = function () {
-      addMode = src.value;
-      fc.hidden = addMode !== "manual";
-      pf.hidden = addMode !== "foods";
-      pp.hidden = addMode !== "plan";
-    };
-    src.addEventListener("change", sync);
-    card.appendChild(fc);
-    card.appendChild(pf);
-    card.appendChild(pp);
-    sync();
-    return card;
+    if (psel && defId) {
+      psel.value = defId;
+      build();
+    }
+    return pp;
   }
-  /* Shortcut: plans assigned to the weekday of the date being viewed. */
-  function planShortcut(L, d) {
+  function mealsCard(L, d) {
     var dw = dow(d),
-      pls = S.plans.filter(function (p) {
+      as = S.plans.filter(function (p) {
         return p.days.indexOf(dw) > -1;
-      });
-    if (!pls.length) return null;
-    var card = el(
-      "div",
-      { cls: "card" },
-      el("h2", { text: "Plan for " + DNAME[dw] }),
-    );
-    var er = el("div", { cls: "err", hidden: "hidden" });
-    pls.forEach(function (pl) {
-      card.appendChild(
-        el(
-          "div",
-          { style: "padding:6px 0" },
-          el("div", { style: "font-weight:600", text: pl.name }),
-          el("div", {
-            cls: "mut",
-            text:
-              pl.items.length +
-              " food" +
-              (pl.items.length > 1 ? "s" : "") +
-              ": " +
-              fmtTot(
-                sumQ(
-                  pl.items.map(function (it) {
-                    return { it: it, q: it.q };
-                  }),
-                ),
-              ),
-          }),
-        ),
+      })[0],
+      card = el(
+        "div",
+        { cls: "card" },
+        el("h2", { text: "Meals for " + DNAME[dw] }),
       );
+    if (!as)
       card.appendChild(
-        el("button", {
-          cls: "btn",
-          type: "button",
-          text: "Add all of " + pl.name,
-          on: [
-            "click",
-            function () {
-              var ents = pl.items.map(function (it) {
-                  return mkEntry(it, it.q, it.m);
-                }),
-                errs = [];
-              ents.forEach(function (e) {
-                errs = errs.concat(entryErrs(e));
-              });
-              if (errs.length) {
-                showErr(er, errs);
-                return;
-              }
-              ents.forEach(function (e) {
-                L.f.push(e);
-              });
-              save();
-              renderToday();
-            },
-          ],
+        el("p", {
+          cls: "mut",
+          text:
+            "No meal plan is assigned to " + DNAME[dw] + ". Pick one below.",
         }),
       );
-    });
-    card.appendChild(er);
+    card.appendChild(buildPlanPanel(L, as ? as.id : ""));
     return card;
   }
-
   function newDraft() {
     return { id: null, name: "", days: [], items: [] };
   }
@@ -2053,12 +2177,12 @@
       el(
         "div",
         { cls: "grid" },
-        el("label", { text: "Food name" }, nI),
-        el("label", { text: "Serving (for example 1 cup cooked)" }, sI),
-        el("label", { text: "Calories per serving (kcal)" }, cI),
-        el("label", { text: "Protein g per serving (optional)" }, pI),
-        el("label", { text: "Carbs g per serving (optional)" }, bI),
-        el("label", { text: "Fat g per serving (optional)" }, fI),
+        el("label", { text: "Food name*" }, nI),
+        el("label", { text: "Serving (ex. 1 cup)*" }, sI),
+        el("label", { text: "Calories per serving (kcal)*" }, cI),
+        el("label", { text: "Protein g per serving" }, pI),
+        el("label", { text: "Carbs g per serving" }, bI),
+        el("label", { text: "Fat g per serving" }, fI),
       ),
     );
     var tS = el("select", { id: "mt" });
@@ -2116,7 +2240,7 @@
     card.appendChild(
       el("p", {
         cls: "mut",
-        text: "Enter the values for one serving. Changing a saved food does not change meal plans that already use it.",
+        text: "Fields marked * are required. Enter the values for one serving. Changing a saved food does not change meal plans that already use it.",
       }),
     );
     card.appendChild(
@@ -2341,14 +2465,10 @@
     card.appendChild(
       el("p", {
         cls: "mut",
-        text: "Common foods with values per serving worked out from USDA FoodData Central per 100 g data. Tick the ones you want and add them to My foods, where you can edit them. Packaged and cooked foods vary, so check your own labels.",
+        text: "Common foods with values per serving worked out from USDA FoodData Central per 100 g data. Open a group, tick the foods you want, and add them to My foods, where you can edit them. Packaged and cooked foods vary, so check your own labels.",
       }),
     );
     var rows = [];
-    var box = el("div", {
-      style:
-        "max-height:240px;overflow:auto;border:1px solid var(--rule);border-radius:6px;padding:4px 8px",
-    });
     TYPES.forEach(function (t) {
       var inType = STARTER.map(function (r, i) {
         return { r: r, i: i };
@@ -2356,39 +2476,24 @@
         return x.r[1] === t[0];
       });
       if (!inType.length) return;
-      box.appendChild(
-        el("div", {
-          style: "font-size:13px;font-weight:600;margin-top:6px",
-          text: t[1],
-        }),
-      );
+      var body = el("div");
       inType.forEach(function (x) {
         var f = starterFood(x.r),
           cb = el("input", {
             type: "checkbox",
-            style: "width:auto;margin:0 8px 0 0",
+            style: "width:auto;margin:0 10px 0 0",
           });
         rows.push({ i: x.i, cb: cb });
-        box.appendChild(
-          el(
-            "label",
-            {
-              style:
-                "display:flex;align-items:center;font-weight:400;padding:3px 0",
-            },
+        body.appendChild(
+          foodRow(
             cb,
-            f.n +
-              " (" +
-              f.s +
-              ") \u00b7 " +
-              trim(f.c, 6) +
-              " kcal \u00b7 " +
-              nutr(f),
+            f.n + " (" + f.s + ")",
+            trim(f.c, 6) + " kcal \u00b7 " + nutr(f),
           ),
         );
       });
+      card.appendChild(accGroup("starter:" + t[0], t[1], inType.length, body));
     });
-    card.appendChild(box);
     if (starterMsg) card.appendChild(el("p", { cls: "mut", text: starterMsg }));
     card.appendChild(
       el("button", {
@@ -2445,14 +2550,14 @@
       D.name = nI.value;
     });
     card.appendChild(
-      el("label", { text: "Plan name (for example Monday meal)" }, nI),
+      el("label", { text: "Plan name (for example Monday meal)*" }, nI),
     );
     var dl = el(
       "div",
       { style: "margin-top:10px" },
       el("div", {
         style: "font-size:14px;font-weight:600",
-        text: "Use on these days (optional)",
+        text: "Use on these days",
       }),
     );
     DORDER.forEach(function (x) {
@@ -2500,9 +2605,9 @@
         el(
           "div",
           { cls: "grid" },
-          el("label", { text: "Food" }, fsel),
-          el("label", { text: "Servings (0.25 to 20)" }, qI),
-          el("label", { text: "Meal" }, ms),
+          el("label", { text: "Food*" }, fsel),
+          el("label", { text: "Servings (0.25 to 20)*" }, qI),
+          el("label", { text: "Meal*" }, ms),
         ),
       );
       card.appendChild(
@@ -2638,58 +2743,10 @@
         );
       }
     }
-    var se = el("div", { cls: "err", hidden: "hidden" });
-    card.appendChild(se);
     card.appendChild(
-      el("button", {
-        cls: "btn",
-        type: "button",
-        text: D.id ? "Save changes" : "Save plan",
-        on: [
-          "click",
-          function () {
-            var errs = [],
-              name = D.name.trim();
-            if (name.length < 1 || name.length > 40)
-              errs.push("Plan name is required (up to 40 characters).");
-            if (
-              S.plans.some(function (p) {
-                return (
-                  p.id !== D.id && p.name.toLowerCase() === name.toLowerCase()
-                );
-              })
-            )
-              errs.push("You already have a plan with that name.");
-            if (!D.items.length)
-              errs.push("Add at least one food to the plan.");
-            if (!D.id && S.plans.length >= 50)
-              errs.push("You can save up to 50 plans.");
-            if (errs.length) {
-              showErr(se, errs);
-              return;
-            }
-            var items = D.items.map(function (it) {
-              return Object.assign({}, it);
-            });
-            items.sort(function (a, b) {
-              return SLOTS.indexOf(a.m) - SLOTS.indexOf(b.m);
-            });
-            var rec = {
-              id: D.id || newId(),
-              name: name,
-              days: D.days.slice(),
-              items: items,
-            };
-            if (D.id)
-              S.plans = S.plans.map(function (p) {
-                return p.id === D.id ? rec : p;
-              });
-            else S.plans.push(rec);
-            planDraft = newDraft();
-            save();
-            renderMeals();
-          },
-        ],
+      el("p", {
+        cls: "mut",
+        text: "Your meal plan is saved when you click Calculate and save plan at the bottom of this page.",
       }),
     );
     if (D.id || D.name || D.items.length || D.days.length)
@@ -2708,6 +2765,48 @@
         }),
       );
     return card;
+  }
+  /* The meal plan being built is checked and saved together with the targets. */
+  function draftErrors() {
+    var D = planDraft,
+      errs = [];
+    if (!D || (!D.name.trim() && !D.items.length)) return errs;
+    var name = D.name.trim();
+    if (name.length < 1 || name.length > 40)
+      errs.push("Meal plan name is required (up to 40 characters).");
+    if (
+      S.plans.some(function (p) {
+        return p.id !== D.id && p.name.toLowerCase() === name.toLowerCase();
+      })
+    )
+      errs.push("You already have a meal plan with that name.");
+    if (!D.items.length)
+      errs.push("Add at least one food to the meal plan, or clear it.");
+    if (!D.id && S.plans.length >= 50)
+      errs.push("You can save up to 50 meal plans.");
+    return errs;
+  }
+  function commitDraft() {
+    var D = planDraft;
+    if (!D || (!D.name.trim() && !D.items.length)) return;
+    var items = D.items.map(function (it) {
+      return Object.assign({}, it);
+    });
+    items.sort(function (a, b) {
+      return SLOTS.indexOf(a.m) - SLOTS.indexOf(b.m);
+    });
+    var rec = {
+      id: D.id || newId(),
+      name: D.name.trim(),
+      days: D.days.slice(),
+      items: items,
+    };
+    if (D.id)
+      S.plans = S.plans.map(function (p) {
+        return p.id === D.id ? rec : p;
+      });
+    else S.plans.push(rec);
+    planDraft = newDraft();
   }
   function plansListCard() {
     var card = el(
@@ -3096,7 +3195,7 @@
       card.appendChild(
         el("p", {
           cls: "mut",
-          text: "Save your plan first (Plan > Targets). The generator uses your calorie and macro targets.",
+          text: "Save your plan first (Plan tab). The generator uses your calorie and macro targets.",
         }),
       );
       return card;
@@ -3144,7 +3243,11 @@
         { cls: "grid" },
         el("label", { text: "Days to generate" }, dS),
         el("label", { text: "Meals per day" }, mS),
-        el("label", { text: "Daily calories (" + c.floor + " to 6,000)" }, kI),
+        el(
+          "label",
+          { text: "Daily calories (" + c.floor + " to 6,000) *" },
+          kI,
+        ),
       ),
     );
     var dietS = el("select");
@@ -3201,32 +3304,33 @@
         text: "Foods to use",
       }),
     );
-    var box = el("div", {
-      style:
-        "max-height:200px;overflow:auto;border:1px solid var(--rule);border-radius:6px;padding:4px 8px;margin-top:4px",
-    });
-    sortedFoods().forEach(function (f) {
-      var cb = el("input", {
-        type: "checkbox",
-        style: "width:auto;margin:0 8px 0 0",
+    var gbox = el("div", { style: "margin-top:4px" });
+    TYPES.forEach(function (t) {
+      var list = sortedFoods().filter(function (f) {
+        return (f.type || "other") === t[0];
       });
-      cb.checked = !genOpts.off[f.id];
-      cb.addEventListener("change", function () {
-        genOpts.off[f.id] = !cb.checked;
+      if (!list.length) return;
+      var body = el("div");
+      list.forEach(function (f) {
+        var cb = el("input", {
+          type: "checkbox",
+          style: "width:auto;margin:0 10px 0 0",
+        });
+        cb.checked = !genOpts.off[f.id];
+        cb.addEventListener("change", function () {
+          genOpts.off[f.id] = !cb.checked;
+        });
+        body.appendChild(
+          foodRow(
+            cb,
+            f.n + " (" + f.s + ")",
+            trim(f.c, 6) + " kcal \u00b7 " + nutr(f),
+          ),
+        );
       });
-      box.appendChild(
-        el(
-          "label",
-          {
-            style:
-              "display:flex;align-items:center;font-weight:400;padding:4px 0",
-          },
-          cb,
-          f.n + " (" + f.s + ") \u00b7 " + trim(f.c, 6) + " kcal",
-        ),
-      );
+      gbox.appendChild(accGroup("gen:" + t[0], t[1], list.length, body));
     });
-    card.appendChild(box);
+    card.appendChild(gbox);
     var ge = el("div", { cls: "err", hidden: "hidden" });
     card.appendChild(ge);
     card.appendChild(
@@ -3447,6 +3551,35 @@
     var host = $("meals");
     clear(host);
     if (!planDraft) planDraft = newDraft();
+    var top = el("div", { cls: "card" }, el("h2", { text: "Meals" }));
+    var cb = el("input", {
+      type: "checkbox",
+      style: "width:auto;margin:0 8px 0 0",
+    });
+    cb.checked = !!S.skipMeals;
+    cb.addEventListener("change", function () {
+      S.skipMeals = cb.checked;
+      save();
+      renderMeals();
+    });
+    top.appendChild(
+      el(
+        "label",
+        { style: "display:flex;align-items:flex-start;font-weight:400" },
+        cb,
+        "I will use the Daily log. I do not need a meal plan.",
+      ),
+    );
+    top.appendChild(
+      el("p", {
+        cls: "mut",
+        text: S.skipMeals
+          ? "Meal plan setup is skipped. Log your foods in the Daily log."
+          : "Save your foods, then build a meal plan. Your plan appears in the Daily log.",
+      }),
+    );
+    host.appendChild(top);
+    if (S.skipMeals) return;
     host.appendChild(foodFormCard());
     host.appendChild(foodListCard());
     host.appendChild(starterCard());
@@ -3687,8 +3820,7 @@
         on: [
           "click",
           function () {
-            planSub = "fast";
-            show("plan");
+            show("fast");
           },
         ],
       }),
@@ -3726,7 +3858,7 @@
     sel.appendChild(el("option", { value: "custom", text: "Custom length" }));
     sel.value = F.kind;
     var hI = el("input", { id: "fh", value: String(F.hours) }),
-      lH = el("label", { text: "Fasting hours (12 to 24)" }, hI);
+      lH = el("label", { text: "Fasting hours (12 to 24) *" }, hI);
     function syncT() {
       lH.hidden = sel.value !== "custom";
     }
@@ -3890,7 +4022,7 @@
         value: toInput(Date.now()),
       });
       sc.appendChild(
-        el("div", { cls: "grid" }, el("label", { text: "Started at" }, fsI)),
+        el("div", { cls: "grid" }, el("label", { text: "Started at *" }, fsI)),
       );
       var se = el("div", { cls: "err", hidden: "hidden" });
       sc.appendChild(se);
@@ -3956,8 +4088,8 @@
       el(
         "div",
         { cls: "grid" },
-        el("label", { text: "Fast started" }, lsI),
-        el("label", { text: "Fast ended" }, leI),
+        el("label", { text: "Fast started *" }, lsI),
+        el("label", { text: "Fast ended *" }, leI),
       ),
     );
     var le = el("div", { cls: "err", hidden: "hidden" });
@@ -4601,14 +4733,14 @@
     g.appendChild(
       el(
         "label",
-        { text: "Date" },
+        { text: "Date *" },
         el("input", { id: "wd", type: "date", value: ed ? ed.d : todayStr() }),
       ),
     );
     g.appendChild(
       el(
         "label",
-        { text: "Weight (" + p.wu + ")" },
+        { text: "Weight (" + p.wu + ") *" },
         el("input", {
           id: "ww",
           step: "any",
@@ -4663,7 +4795,7 @@
         errs.push("Weigh-in date cannot be in the future.");
       else if (d === p.start)
         errs.push(
-          "The weigh-in for your plan start date comes from your plan. Change it in Plan > Targets.",
+          "The weigh-in for your plan start date comes from your plan. Change it on the Plan tab.",
         );
       if (!isFinite(v) || v < 35 || v > 300)
         errs.push("Weight must be between 35 and 300 kg (77 to 661 lb).");
@@ -4824,4 +4956,5 @@
   }
 
   if (S.plan) renderPlan();
+  renderMeals();
 })();
