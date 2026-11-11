@@ -13,7 +13,7 @@ No server, no account, no build step. Your data stays in your browser's local st
 - **Live budget** showing calories left or over, with a progress bar and "Day X of Y" counter
 - **Exercise calories** from the 2024 Compendium of Physical Activities: pick an activity and intensity, or enter speed (and grade) for walking, running, and cycling
 - **Starter foods, food types, and diet and allergy filters** for building meals from common foods
-- **My foods and meal plans** (Plan tab, Meals section) so common foods and whole meals can be added to the daily log in one tap
+- **Meal plan pop-up** (Plan tab, Meals section): restrictions, foods, confirmation, and generated meal plans, ready for the daily log
 - **Fasting tracker** (daily time-restricted eating) with a safety check, your own target, a live timer, and a fast history
 - **Weight chart** with your weigh-ins, a 7-day average line, and your planned path
 - **Weekly check** that compares your weight trend with the plan and suggests a target adjustment you can apply or ignore
@@ -58,48 +58,43 @@ Changing the goal sets this to 50% for losing and 100% for maintaining or gainin
 Because your maintenance calories do not include logged workouts, your budget goes up when you log exercise unless this is set to 0%. When gaining, the daily log shows "kcal to reach target" so you know how much more to eat.
 
 4. **Fasting tab**: answer the safety check to unlock it, choose your fasting type and hours, then start and end fasts or log past ones.
-5. **Plan tab, Meals section**: save your common foods (per serving), then build meal plans such as "Monday meal" from them. If you do not want a meal plan, tick **I will use the Daily log**. When you have a meal plan, the Daily log shows its meals first, with each food's nutrition, and keeps the **Add food** card behind an **Add food manually** button for anything you eat outside the plan. Without a meal plan, **Add food** lets you type a food or pick one from My foods.
+5. **Plan tab, Meals section**: leave **I will use the Daily log** ticked to skip meal plans, or click **Add meal plan** for the four-page meal plan pop-up (see Meals and meal plans below). With a meal plan, the Daily log shows its meals first, with each food's nutrition, and keeps the **Add food** card behind an **Add food manually** button. Without one, **Add food** lets you type a food or pick one from My foods.
 
-## Meals: My foods and meal plans
+## Meals and meal plans
 
-**My foods.** Save a food once with a serving description (for example "1 cup cooked") and its calories, protein, carbs, and fat for one serving. You can search, edit, and delete saved foods.
+The **Meals** section of the Plan tab starts with the box **I will use the Daily log. I do not need a meal plan.** It is ticked by default, so you can skip meal plans entirely. Click **Add meal plan** to open a four-page pop-up that builds ready-made meals for the Daily log. Closing the pop-up keeps your progress until you finish.
 
-**Food type and tags.** Each saved food has a type (protein, grain or starch, vegetable, fruit, dairy, fat or nut, or other) and a "Contains" list (meat, fish, shellfish, eggs, dairy, gluten, peanuts, tree nuts, soy). Tick "I have checked this food's ingredients" so filters can trust the tags. A food that was never checked is treated as unknown.
+**Page 1: Food restrictions.** Choose a diet (anything, vegetarian, pescatarian, or vegan) and tick the foods to leave out (meat, fish, shellfish, eggs, dairy, gluten, peanuts, tree nuts, soy). Filters use only the tags on your foods, and a food that was never checked is treated as unknown and left out while a filter is on. Filters do not replace reading labels.
 
-**Starter foods.** The Meals section includes 25 common foods (chicken, salmon, eggs, tofu, lentils, beans, chickpeas, yogurt, milk, rice, pasta, quinoa, oats, potatoes, fruit, vegetables, almonds, olive oil, avocado). Foods are grouped in drop-down lists by type: click a group to open it, tick the ones you want, and add them to My foods, where you can edit them. Values per serving are worked out from USDA FoodData Central (SR Legacy) values per 100 g. Calories and protein were cross-checked against several USDA-derived sources, and carbs and fat use the standard SR Legacy values and agree with the calories within about 12% using 4 kcal per gram of protein and carbs and 9 per gram of fat. The exceptions are high-fiber vegetables (broccoli and spinach), where the difference is larger because fiber counts as carbohydrate but gives little energy. Cooking, brands, and varieties change nutrition, so check your own labels.
+**Page 2: Add foods.** Name the meal plan first (for example "Monday meal"), then pick its foods from three places: your saved foods, the starter foods, or a food you type in. Foods are grouped in drop-down lists by type, with the food name in bold and its nutrition below. Foods that do not fit your restrictions are shown but cannot be picked, and the reason is given.
 
-**Meal plans.** A meal plan you are building is saved when you click **Calculate and save plan**. A plan is a named set of foods, each with a number of servings and a meal slot (Breakfast, Lunch, Dinner, or Snack). You can assign a plan to weekdays, duplicate it, edit it, and delete it. While you build a plan, the app shows its total calories and macros next to your daily target.
+- **Add meal plan** saves the plan to this session and clears the form, so you can add more plans. A confirmation banner and a running list of the plans added so far confirm it.
+- **Proceed** moves on to page 3. If a plan is half-filled in, it is added first.
 
-**In the Daily log.** The **Add food** card has a source choice:
+**Page 3: Confirm.** Review every plan with the nutrition of each food, enter your daily calories (it starts at your plan's target), choose 3 meals or 3 meals and a snack, and click **Generate meal plan**. The generator picks foods for each meal by food type and chooses servings in steps of 0.25 (up to 4, or 2 for oils and low-calorie sides) so each day lands close to your calorie and macro targets. If a plan's name contains a weekday (for example "Monday meal"), it is assigned to that weekday.
 
-- **Type it in**: the manual form.
-- **From My foods**: pick a food, the servings, and the meal.
-- **From a meal plan**: pick a plan, untick any food you did not eat, adjust servings, and add the rest.
+**Page 4: Done.** Shows each generated plan with its totals against your targets, a warning if it could not match them closely, and an **Open daily log** button.
 
-If a plan is assigned to the weekday of the date you are viewing, a **Plan for Monday** card appears at the top with an **Add all** button.
+**Saved meal plans** are listed in the Meals section, where you can assign weekdays, duplicate, or delete them. In the Daily log, a meal plan card lists the plan's foods with nutrition for the day you are viewing (the plan assigned to that weekday, or any plan you pick), and the **Add food** card moves behind an **Add food manually** button for anything outside the plan. Foods only count toward the day when you click **Add selected foods**.
 
-**Copies, not links.** A plan stores its own copy of each food's nutrients, and adding foods to the log copies the values into that day. Editing or deleting a saved food or plan later never changes plans or past days.
+**Food type and tags.** Each saved food has a type (protein, grain or starch, vegetable, fruit, dairy, fat or nut, or other) and a "Contains" list. Tick "I have checked this food's ingredients" so filters can trust the tags.
 
-**Generate a meal plan.** In the Meals section, the generator builds meal plans from the foods you saved.
-
-- Choose 1 to 7 days, 3 meals or 3 meals and a snack, a diet (anything, vegetarian, pescatarian, or vegan), foods to leave out (for example dairy, gluten, or tree nuts), and your daily calories (it starts at your plan's target; the minimum is your calorie floor and the maximum is 6,000). Tick the foods it may use.
-- Diet and allergy filters use only the tags on your foods. Foods that were never checked are left out while a filter is on, and the preview says why each food was skipped. Filters do not replace reading labels.
-- It picks foods for each meal by their food type (or, if none is set, by what they mostly provide) and rotates foods across days. It then chooses servings in steps of 0.25 (up to 4, or 2 for oils and low-calorie sides) so the day lands close to your calorie and macro targets.
-- The preview shows each food with its servings and the nutrition for that amount, the per-serving facts you saved, the day's total, and how far the total is from your targets. It warns when it cannot match your targets closely, which usually means you need a protein source and a carb source in your foods.
-- Nothing is saved until you click **Save as meal plan** (or **Save all**). Saved plans appear in Meal plans and in the Daily log, where you can rename them and assign weekdays.
-- Foods with no macros entered, under 4 kcal or over 1,250 kcal per serving, or with more than 125 g of one macro per serving are skipped, and the preview says which.
+**Starter foods.** 25 common foods (chicken, salmon, eggs, tofu, lentils, beans, chickpeas, yogurt, milk, rice, pasta, quinoa, oats, potatoes, fruit, vegetables, almonds, olive oil, avocado). Values per serving are worked out from USDA FoodData Central (SR Legacy) values per 100 g. Calories and protein were cross-checked against several USDA-derived sources, and carbs and fat use the standard SR Legacy values and agree with the calories within about 12% using 4 kcal per gram of protein and carbs and 9 per gram of fat. The exceptions are high-fiber vegetables (broccoli and spinach), where the difference is larger because fiber counts as carbohydrate but gives little energy. Cooking, brands, and varieties change nutrition, so check your own labels.
 
 The generator uses only the nutrition values you entered and knows nothing about taste, cooking, allergies, or dietary needs, so check each plan before you follow it. It is not medical or dietitian advice.
 
-| Meals field                                | Rule                                                                          |
-| ------------------------------------------ | ----------------------------------------------------------------------------- |
-| Food name / serving                        | 1 to 60 / 1 to 40 characters; the same name and serving cannot be saved twice |
-| Calories per serving                       | 1 to 5,000                                                                    |
-| Protein, carbs, fat per serving (My foods) | Blank, or 0.1 to 500 g (the Daily log's typed entries stay at 1 to 500 g)     |
-| Servings (plans and log)                   | 0.25 to 20, decimals allowed                                                  |
-| Scaled log entry                           | Calories must work out to 1 to 5,000, and each macro to 500 g or less         |
-| Plan name                                  | 1 to 40 characters, unique                                                    |
-| Limits                                     | Up to 200 foods, 50 plans, and 30 foods per plan                              |
+| Meals field                                   | Rule                                                                                                 |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Food name / serving                           | 1 to 60 / 1 to 40 characters; the same name and serving cannot be saved twice                        |
+| Calories per serving                          | 1 to 5,000                                                                                           |
+| Protein, carbs, fat per serving (saved foods) | Blank, or 0.1 to 500 g (typed Daily log entries stay at 1 to 500 g)                                  |
+| Servings (Daily log)                          | 0.25 to 20, decimals allowed                                                                         |
+| Scaled log entry                              | Calories must work out to 1 to 5,000, and each macro to 500 g or less                                |
+| Meal plan name                                | 1 to 40 characters, unique                                                                           |
+| Foods per meal plan                           | At least 2 that fit your restrictions                                                                |
+| Daily calories (generator)                    | Your calorie floor (1,500 male, 1,200 female) to 6,000                                               |
+| Limits                                        | Up to 200 foods and 50 meal plans                                                                    |
+| Skipped by the generator                      | Foods with no macros, under 4 or over 1,250 kcal per serving, or over 125 g of one macro per serving |
 
 ## Fasting
 
